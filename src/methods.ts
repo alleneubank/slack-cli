@@ -1,10 +1,13 @@
 import { z } from '@alleneubank/incur'
 
 import catalogJson from './catalog.json' with { type: 'json' }
-import { isDestructive, MUTATING_METHODS, POSITIONAL_ARGUMENTS } from './overlay.js'
+import { isDestructive, METHOD_NOTES, MUTATING_METHODS, POSITIONAL_ARGUMENTS } from './overlay.js'
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
 const catalog = catalogJson as Catalog
+for (const name of Object.keys(METHOD_NOTES))
+  if (!catalog.methods.some((method) => method.name === name))
+    throw new Error(`Overlay note ${name} is not a catalog method`)
 
 /** Flags the CLI owns. A Slack argument with one of these names is exposed as `--slack_<name>`. */
 const reservedFlags: ReadonlySet<string> = new Set([
@@ -123,6 +126,8 @@ function optionSchema(argument: CatalogArgument): z.ZodType {
 
 function hint(method: CatalogMethod): string {
   const lines: string[] = []
+  const note = METHOD_NOTES[method.name]
+  if (note !== undefined) lines.push(`Note: ${note}`)
   if (method.scopes.user.length > 0)
     lines.push(`User token scopes: ${method.scopes.user.join(', ')}`)
   if (method.rateLimit !== undefined)

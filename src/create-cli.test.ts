@@ -313,6 +313,13 @@ describe('Slack Web API methods', () => {
     expect(post.output).toMatch(/--text <string> .*Example: Hello world\./)
   })
 
+  test('help for a method Slack retired says so and names the replacement', async () => {
+    const upload = await run(cli(), ['files', 'upload', '--help'])
+    expect(upload.output).toContain('method_deprecated')
+    expect(upload.output).toContain('files getUploadURLExternal')
+    expect(upload.output).toContain('files completeUploadExternal')
+  })
+
   test('manifests mark methods that destroy data or access as destructive', async () => {
     const manifest = await run(cli(), ['--llms-full', '--format', 'json'])
     const destructive = (name: string) =>

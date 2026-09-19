@@ -39,9 +39,10 @@ output.
 - **Catalog** — `src/catalog.json`, written by `nub run sync-catalog` from the
   method reference. Committed; a sync is a reviewable diff. The CLI never
   reads docs.slack.dev at runtime.
-- **Overlay** — `src/overlay.ts`, hand-written facts the reference does not
-  state: positional arguments for resource ids, and mutating methods whose
-  scopes do not say `:write`.
+- **Overlay** — `src/overlay.ts`, hand-written facts the catalog does not
+  capture: positional arguments for resource ids, mutating methods whose
+  scopes do not say `:write`, and help notes for what a reference page states
+  only in prose (a retired method and its replacement).
 - **incur plugin** — one plugin per top-level family (`conversations`,
   `admin`, …). Remaining name segments are subcommands:
   `users.profile.get` is `slack users profile get`.
