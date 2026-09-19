@@ -55,7 +55,8 @@ output.
   the previous refresh token. Earlier versions stored these.
 - **Long-lived token** — the `xoxp-` token `slack login` stores now: the app
   keeps token rotation off, so it has no refresh token or expiry and lasts
-  until revoked.
+  until revoked. Slack returns the same token to every login by the same user
+  in the same workspace, so revoking it signs out every machine that holds it.
 
 ## Requirements
 
@@ -214,7 +215,9 @@ output.
   them.
 - `search:read` is a requested read scope: `search.messages` needs it and the
   granular `search:read.*` scopes do not grant it (a live `missing_scope`
-  named `search:read`).
+  named `search:read`). The Slack Marketplace does not allow `search:read`,
+  so the app is publicly distributed but not listed there, and Slack caps
+  `conversations.history` and `conversations.replies` for its new installs.
 - `slack skills add` installs one hand-written skill instead of incur's
   generated ones: generated at depth 0 it is one 324 KB file, at depth 1 it is
   37 skills with a 124 KB `admin` skill. The skill teaches discovery

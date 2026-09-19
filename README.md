@@ -62,8 +62,10 @@ Slack keeps the scopes a user granted this app at earlier logins: after one
 `slack login --write`, a later plain `slack login` still returns a token with
 write scopes. `slack workspaces list` shows what the token carries.
 
-Tokens do not expire. `slack auth revoke` invalidates the current token at
-Slack; `slack logout` only removes it from this machine. A rotating token
+Tokens do not expire. Slack gives each user one token per app and workspace,
+so every machine signed in as you shares it: `slack auth revoke` invalidates
+it at Slack and signs all of them out, while `slack logout` only removes it
+from this machine. A rotating token
 stored by an earlier version (12-hour `xoxe.` tokens) is still refreshed
 shortly before it expires, and once if Slack answers `token_expired`, and the
 new pair is saved under a file lock.
@@ -71,8 +73,13 @@ new pair is saved under a file lock.
 ### Using your own Slack app
 
 A workspace can sign in to the project's app only while the app's public
-distribution is enabled, and some workspaces restrict third-party apps. To use
-an app you control, create one from
+distribution is enabled, and some workspaces restrict third-party apps. The
+app is not listed in the Slack Marketplace, so Slack
+[limits](https://docs.slack.dev/changelog/2025/05/29/rate-limit-changes-for-non-marketplace-apps/)
+its new installs: `conversations history` and `conversations replies` return
+at most 15 messages per call and allow 1 request per minute. An app created in
+your own workspace keeps the normal limits. To use an app you control, create
+one from
 [`slack-app-manifest.yaml`](slack-app-manifest.yaml) at
 [api.slack.com/apps](https://api.slack.com/apps) ("Create New App" → "From a
 manifest"), then point the CLI at its client id:
@@ -193,7 +200,9 @@ Unit tests inject `fetch` and never call Slack. Behavior that depends on
 Slack (request encoding, pagination, token refresh) is checked by hand
 against a test workspace. [SPEC.md](SPEC.md) holds the requirements and
 design decisions. Changes that affect the published package need a changeset
-(`nub run changeset`).
+(`nub run changeset`). GitHub Pages publishes [`docs/`](docs/) (landing,
+privacy, support, walkthrough, and the sign-in page) from `main`, so a push to
+`main` changes the live sign-in page.
 
 ## License
 
