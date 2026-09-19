@@ -63,8 +63,8 @@ output.
 
 - **REQ-PKG-001** Package name `@alleneubank/slack-cli`. PATH binary `slack`.
   Single package. Dependency `@alleneubank/incur`, a fork of `incur` that adds
-  root MCP mounts for `mcp: false`, secret env help, and call-time skill
-  directories.
+  root MCP mounts for `mcp: false`, secret env help, call-time skill
+  directories, and installs the files beside an included `SKILL.md`.
 - **REQ-API-001** Commands are generated from `src/catalog.json`, which covers
   every method in the reference index that a user token can call (its page
   lists user scopes or no scopes), including `admin.*`. Bot-only methods are
@@ -110,8 +110,8 @@ output.
 - **REQ-MCP-002** This CLI does not present itself as an MCP server:
   create-level `mcp` is `false`, and README does not tell users to run
   `mcp add` or `--mcp` on `slack`. `slack skills add` installs one
-  hand-written skill, `skills/slack/SKILL.md`, in place of incur's generated
-  skills.
+  hand-written skill, `skills/slack/` (`SKILL.md` and the reference files it
+  links), in place of incur's generated skills.
 - **REQ-AUTH-001** The token comes from `SLACK_TOKEN`, else from the stored
   workspace selected by `--workspace`, else `SLACK_WORKSPACE`, else
   `currentTeamId`. Never from a flag: `--token` is rejected. A named workspace
@@ -222,7 +222,10 @@ output.
 - `slack skills add` installs one hand-written skill instead of incur's
   generated ones: generated at depth 0 it is one 324 KB file, at depth 1 it is
   37 skills with a 124 KB `admin` skill. The skill teaches discovery
-  (`--help`, per-family `--llms-full`) instead of listing methods.
+  (`--help`, per-family `--llms-full`) instead of listing methods, and keeps
+  `SKILL.md` short: flows that need more than one method or a step outside
+  the Web API (file upload, message links, lookups by name) live in
+  `skills/slack/references/`, which agents read on demand.
 - incur's prompt-injection scan stays on and may add `_warnings` to Slack's
   JSON: agents reading other people's messages need the signal more than
   byte-for-byte output.
@@ -266,7 +269,8 @@ output.
 - REQ-API-008 — a pseudo-terminal run of `slack auth test` against a local
   registry that logs requests: none without `--update`
 - REQ-MCP-002 — `src/create-cli.test.ts` (help lists `skills`, not `mcp add`;
-  the skill is small and states the CLI's exit codes; `skills add` installs it)
+  the skill is small and states the CLI's exit codes; every file it links
+  exists; `skills add` installs it with those files)
 - REQ-AUTH-003 (redirect page, state, paste) — `src/login.test.ts` imports the
   page's `docs/callback/relay.js`; a live login in the test workspace
 - Login scopes — `src/login.test.ts` (plain login requests no scope a

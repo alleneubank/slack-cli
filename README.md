@@ -147,10 +147,12 @@ it may have been applied, so check before sending it again.
 slack skills add
 ```
 
-Installs one skill ([`skills/slack/SKILL.md`](skills/slack/SKILL.md)) that
-tells coding agents how to use the CLI: check `slack workspaces list`, find
-commands with `slack <family> --llms-full` or `--help`, page with `--cursor`,
-preview writes with `--dry-run`, and act on exit codes. Commands that delete,
+Installs one skill ([`skills/slack/`](skills/slack/SKILL.md)) that tells
+coding agents how to use the CLI: check `slack workspaces list`, find commands
+with `slack <family> --llms-full` or `--help`, page with `--cursor`, preview
+writes with `--dry-run`, and act on exit codes. Reference files it links cover
+flows that take more than one command, such as uploading a file, working
+from a message link, and finding a channel or person by name. Commands that delete,
 archive, or revoke are marked `destructive` in `--llms-full` so agents confirm
 first. Output gains a `_warnings` array when Slack text looks like a prompt
 injection; message text is written by other people and is data, not

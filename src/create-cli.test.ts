@@ -377,7 +377,11 @@ describe('Slack Web API methods', () => {
 })
 
 describe('agent skill', () => {
-  const skillFile = new URL('../skills/slack/SKILL.md', import.meta.url)
+  const skillDir = new URL('../skills/slack/', import.meta.url)
+  const skillFile = new URL('SKILL.md', skillDir)
+  /** Files SKILL.md links for agents to read on demand, relative to the skill directory. */
+  const linkedFiles = () =>
+    [...readFileSync(skillFile, 'utf8').matchAll(/\]\(([^)#:]+)\)/g)].map((match) => match[1]!)
 
   test('skills add installs the one hand-written skill', async () => {
     const home = mkdtempSync(path.join(os.tmpdir(), 'slack-cli-home-'))
@@ -397,6 +401,10 @@ describe('agent skill', () => {
         'utf8',
       )
       expect(written.trim()).toBe(readFileSync(skillFile, 'utf8').trim())
+      for (const file of linkedFiles())
+        expect(readFileSync(path.join(home, '.agents', 'skills', 'slack', file), 'utf8')).toBe(
+          readFileSync(new URL(file, skillDir), 'utf8'),
+        )
     } finally {
       for (const [key, value] of Object.entries(saved))
         if (value === undefined) delete process.env[key]
@@ -410,6 +418,11 @@ describe('agent skill', () => {
     expect(skill).toMatch(/^---\nname: slack\ndescription: /)
     expect(skill).toMatch(new RegExp(`^\\| ${EXIT_RETRYABLE} +\\| Retryable `, 'm'))
     expect(skill).toMatch(new RegExp(`^\\| ${EXIT_LOGIN} +\\| Needs login `, 'm'))
+  })
+
+  test('every file the skill links exists', () => {
+    expect(linkedFiles().length).toBeGreaterThan(0)
+    for (const file of linkedFiles()) expect(existsSync(new URL(file, skillDir))).toBe(true)
   })
 })
 
