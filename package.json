@@ -1,6 +1,6 @@
 {
   "name": "@alleneubank/slack-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Unofficial Slack Web API CLI for people and coding agents: every user-token method as a typed command. Not affiliated with Slack.",
   "keywords": [
     "agents",
@@ -54,7 +54,7 @@
     "release": "nub run build && changeset publish"
   },
   "dependencies": {
-    "@alleneubank/incur": "^0.8.0"
+    "@alleneubank/incur": "^0.8.1"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",

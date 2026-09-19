@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@alleneubank/incur':
-        specifier: ^0.8.0
-        version: 0.8.0
+        specifier: ^0.8.1
+        version: 0.8.1
     devDependencies:
       '@changesets/cli':
         specifier: ^2.31.1
@@ -42,8 +42,8 @@ importers:
 
 packages:
 
-  '@alleneubank/incur@0.8.0':
-    resolution: {integrity: sha512-HW8YwLXyM3hnLWQfVEtonS8TK7MZV83SOl1KFg2T3chRCOvOW16MBLRHM2mMZd1Pbm/HuTGOv8kHHiwJn9PiHQ==}
+  '@alleneubank/incur@0.8.1':
+    resolution: {integrity: sha512-OzoygZw9bMrANtgM+226LYBXBbzcRHArPQrJkrRpZ7HUqvwG7I/G/6+y2gwJiz+/tuBiYc568pWXwyHj4pCr+Q==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -2121,7 +2121,7 @@ packages:
 
 snapshots:
 
-  '@alleneubank/incur@0.8.0':
+  '@alleneubank/incur@0.8.1':
     dependencies:
       '@bufbuild/protobuf': 2.15.0
       '@cfworker/json-schema': 4.1.1
