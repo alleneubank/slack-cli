@@ -1,6 +1,6 @@
 {
   "name": "@alleneubank/slack-cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Unofficial Slack Web API CLI for people and coding agents: every user-token method as a typed command. Not affiliated with Slack.",
   "keywords": [
     "agents",
