@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Walkthrough · CLI for Slack (unofficial)</title>
+    <meta
+      name="description"
+      content="Screenshots of installing CLI for Slack (unofficial), signing in with Slack, and using it."
+    />
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="page">
+      <nav class="site-nav">
+        <a class="home" href="../"
+          ><img src="../assets/icon.png" alt="" />CLI for Slack (unofficial)</a
+        >
+        <a href="../privacy/">Privacy</a>
+        <a href="../support/">Support</a>
+        <a href="https://github.com/alleneubank/slack-cli">Source</a>
+      </nav>
+
+      <h1>Walkthrough</h1>
+      <p class="lede">
+        Installing the CLI, signing in with Slack, and using it, captured from a real session with
+        version 0.2.0 in a test workspace.
+      </p>
+
+      <h2>1. Install</h2>
+      <p>The CLI is an npm package and needs Node.js 22 or later. There is no account to create.</p>
+      <pre><span class="prompt">$ </span>npm install --global @alleneubank/slack-cli
+added 13 packages in 1s
+<span class="prompt">$ </span>slack --version
+0.2.0</pre>
+
+      <h2>2. Sign in with Slack</h2>
+      <p>
+        <code>slack login</code> opens Slack's consent page in the browser. Plain
+        <code>slack login</code> asks only for read access; <code>--write</code> also asks to post,
+        react, and upload.
+      </p>
+      <pre><span class="prompt">$ </span>slack login --write
+Authorize Slack:
+https://slack.com/oauth/v2_user/authorize?response_type=code&amp;client_id=12085301315143.12095834471045&amp;redirect_uri=https%3A%2F%2Falleneubank.github.io%2Fslack-cli%2Fcallback%2F&amp;…</pre>
+      <figure>
+        <img
+          src="consent.png"
+          width="1280"
+          height="820"
+          alt="Slack's page asking to allow CLI for Slack (unofficial) to access the Unruly Systems workspace, with Cancel and Allow buttons"
+        />
+        <figcaption>Choose the workspace and select <strong>Allow</strong>.</figcaption>
+      </figure>
+      <p>
+        Slack redirects to this site's
+        <a href="../callback/">sign-in page</a>, a static page that hands the one-time code to the
+        CLI listening on <code>127.0.0.1</code>. The code is useless without the PKCE verifier,
+        which never leaves the computer, and the app has no client secret.
+      </p>
+      <figure>
+        <img
+          src="relay.png"
+          width="800"
+          height="600"
+          alt="The sign-in page saying Returning to your terminal"
+        />
+        <figcaption>The sign-in page forwards the code to the CLI.</figcaption>
+      </figure>
+      <figure>
+        <img
+          src="signed-in.png"
+          width="800"
+          height="600"
+          alt="A page served by the CLI saying You're signed in, you can close this window"
+        />
+        <figcaption>The CLI confirms in the browser and in the terminal.</figcaption>
+      </figure>
+      <pre>ok: true
+teamId: T0C2H8V9947
+teamName: Unruly Systems
+scopes[31]: "channels:history","groups:history","im:history","mpim:history",…
+<span class="prompt">$ </span>slack auth test --filter-output ok,team,user
+ok: true
+team: Unruly Systems
+user: allen</pre>
+
+      <h3>Signing in over SSH</h3>
+      <p>
+        When the CLI runs on a machine the browser cannot reach, <code>slack login --paste</code>
+        makes the sign-in page show the code instead, and the terminal reads it.
+      </p>
+      <figure>
+        <img
+          src="paste.png"
+          width="800"
+          height="600"
+          alt="The sign-in page showing a masked code with a Copy code button"
+        />
+        <figcaption>The code is masked in this screenshot.</figcaption>
+      </figure>
+      <pre><span class="prompt">$ </span>slack login --paste
+Authorize Slack:
+https://slack.com/oauth/v2_user/authorize?…
+Paste the code shown in the browser: <span class="comment">(code from the page)</span>
+ok: true
+teamId: T0C2H8V9947
+teamName: Unruly Systems</pre>
+
+      <h2>3. Use it</h2>
+      <p>
+        Every Slack Web API method the user's token can call is a command: method
+        <code>a.b.c</code> is <code>slack a b c</code>. Output is Slack's own response, optionally
+        filtered to the fields you need.
+      </p>
+      <pre><span class="prompt">$ </span>slack conversations list --types public_channel --limit 5 --filter-output 'channels[].name'
+channels[4]{name}:
+  all-unruly-systems
+  social
+  deploys
+  new-channel</pre>
+      <p>Writes can be previewed with <code>--dry-run</code>, which sends nothing:</p>
+      <pre><span class="prompt">$ </span>slack chat postMessage C0C2W4H7DAR --text 'Release v2.5.0 is live.' --dry-run
+dryRun: true
+command: chat postMessage
+args:
+  channel: C0C2W4H7DAR
+options:
+  text: Release v2.5.0 is live.</pre>
+      <p>Post a message, reply in its thread, and react to it:</p>
+      <pre><span class="prompt">$ </span>slack chat postMessage C0C2W4H7DAR --text 'Release v2.5.0 is live.' --filter-output ok,ts
+ok: true
+ts: "1789793895.690449"
+<span class="prompt">$ </span>slack chat postMessage C0C2W4H7DAR --thread_ts 1789793895.690449 \
+    --text 'Changelog: faster search and two fixes.' --filter-output ok,ts
+ok: true
+ts: "1789793896.128299"
+<span class="prompt">$ </span>slack reactions add --channel C0C2W4H7DAR --timestamp 1789793895.690449 --name tada
+ok: true</pre>
+      <figure>
+        <img
+          src="slack-result.png"
+          width="1280"
+          height="820"
+          alt="Slack showing the message Release v2.5.0 is live in #deploys with a tada reaction and the thread reply Changelog: faster search and two fixes"
+        />
+        <figcaption>The message, reaction, and thread reply in Slack.</figcaption>
+      </figure>
+      <pre><span class="prompt">$ </span>slack conversations history C0C2W4H7DAR --limit 1 \
+    --filter-output 'messages[0].text,messages[0].reply_count,messages[0].reactions[0].name'
+messages[1]:
+  - text: Release v2.5.0 is live.
+    reply_count: 1
+    reactions[1]{name}:
+      tada</pre>
+
+      <h2>4. Workspaces and signing out</h2>
+      <pre><span class="prompt">$ </span>slack workspaces list --filter-output 'current,workspaces[0].teamName,workspaces[0].rotating'
+current: T0C2H8V9947
+workspaces[1]{teamName,rotating}:
+  Unruly Systems,false
+<span class="prompt">$ </span>slack auth revoke
+ok: true
+revoked: true
+<span class="prompt">$ </span>slack logout
+ok: true
+removed[1]: T0C2H8V9947</pre>
+      <p>
+        <code>slack auth revoke</code> invalidates the token at Slack, and
+        <code>slack logout</code> deletes it from the computer. Tokens never appear in the CLI's
+        output.
+      </p>
+
+      <footer class="site-footer">
+        <p>
+          CLI for Slack (unofficial) by <a href="https://unrulysystems.com">Unruly Systems</a> · MIT
+          License
+        </p>
+        <p>
+          Slack is a trademark of Slack Technologies, LLC. This project is not affiliated with
+          Slack.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
