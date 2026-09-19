@@ -131,7 +131,8 @@ export const OAUTH_CALLBACK_FAILURE_HTML: string = `<!doctype html>
 /**
  * User scopes that catalog methods accept and Slack lets this app request, split so plain
  * `slack login` grants nothing a state-changing method accepts. Left out: `admin.*` (Enterprise
- * organizations only), `admin` (admin installers only; it also grants the SCIM API), and
+ * organizations only), `admin` (admin installers only; it also grants the SCIM API),
+ * `app_configurations:write` and `hosting:read` (the app manifest rejects them as user scopes), and
  * `client`, `identity:read`, `openid`, and `tokens.basic`, which Slack refuses alongside the rest.
  */
 export const OAUTH_READ_SCOPES: readonly string[] = [
@@ -145,7 +146,6 @@ export const OAUTH_READ_SCOPES: readonly string[] = [
   'files:read',
   'groups:history',
   'groups:read',
-  'hosting:read',
   'im:history',
   'im:read',
   'lists:read',
@@ -173,7 +173,6 @@ export const OAUTH_READ_SCOPES: readonly string[] = [
 ]
 
 export const OAUTH_WRITE_SCOPES: readonly string[] = [
-  'app_configurations:write',
   'bookmarks:write',
   'calls:write',
   'canvases:write',

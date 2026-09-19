@@ -61,9 +61,10 @@ land in shell history or process listings.
 Login asks for every user scope a command needs that Slack lets the app
 request. Plain `slack login` asks only for scopes no state-changing method
 accepts; `--write` adds the rest. The `admin.*` scopes (Enterprise
-organizations only), the legacy `admin` scope, and `identity:read`, `openid`,
-`client`, and `tokens.basic` are left out, so the commands that need them fail
-with `missing_scope` unless `SLACK_TOKEN` holds a token that has them.
+organizations only), the legacy `admin` scope, `app_configurations:write`,
+`hosting:read`, `identity:read`, `openid`, `client`, and `tokens.basic` are
+left out, so the commands that need them fail with `missing_scope` unless
+`SLACK_TOKEN` holds a token that has them.
 
 Slack keeps the scopes a user granted this app at earlier logins: after one
 `slack login --write`, a later plain `slack login` still returns a token with

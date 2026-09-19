@@ -8,7 +8,6 @@ oauth_config:
     - https://alleneubank.github.io/slack-cli/callback/
   scopes:
     user:
-      - app_configurations:write
       - bookmarks:read
       - bookmarks:write
       - calls:read
@@ -31,7 +30,6 @@ oauth_config:
       - groups:write
       - groups:write.invites
       - groups:write.topic
-      - hosting:read
       - im:history
       - im:read
       - im:write

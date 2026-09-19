@@ -241,8 +241,10 @@ output.
   workspace: plain `slack login` requests only scopes no state-changing method
   accepts, and `slack login --write` adds the rest. Left out: `admin.*`
   (Enterprise organizations only), `admin` (only admin installers can grant
-  it, and it also grants the SCIM API), and `client`, `identity:read`,
-  `openid`, and `tokens.basic` (Slack refuses the request with them).
+  it, and it also grants the SCIM API), `app_configurations:write` and
+  `hosting:read` (the app manifest rejects them as user scopes), and
+  `client`, `identity:read`, `openid`, and `tokens.basic` (Slack refuses the
+  request with them).
 
 ## Risk tags
 
