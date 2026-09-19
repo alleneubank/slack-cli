@@ -1,0 +1,73 @@
+{
+  "name": "@alleneubank/slack-cli",
+  "version": "0.0.0",
+  "description": "Unofficial Slack Web API CLI for people and coding agents: every user-token method as a typed command. Not affiliated with Slack.",
+  "keywords": [
+    "agents",
+    "cli",
+    "oauth",
+    "pkce",
+    "slack",
+    "slack-api",
+    "web-api"
+  ],
+  "homepage": "https://github.com/alleneubank/slack-cli#readme",
+  "bugs": {
+    "url": "https://github.com/alleneubank/slack-cli/issues"
+  },
+  "license": "MIT",
+  "author": "Allen Eubank (https://github.com/alleneubank)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alleneubank/slack-cli.git"
+  },
+  "bin": {
+    "slack": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "slack-app-manifest.yaml"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "nub run build",
+    "sync-catalog": "nub src/sync-catalog.ts",
+    "typecheck": "tsc -b",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "check": "nub run typecheck && nub run lint && nub run format:check",
+    "test": "vitest run",
+    "knip": "knip",
+    "jscpd": "jscpd src",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "nub run build && changeset publish"
+  },
+  "dependencies": {
+    "@alleneubank/incur": "^0.8.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1",
+    "@types/node": "^24.5.2",
+    "jscpd": "^5.0.12",
+    "knip": "^6.29.0",
+    "oxfmt": "^0.60.0",
+    "oxlint": "^1.75.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

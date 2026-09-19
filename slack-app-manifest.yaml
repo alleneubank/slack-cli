@@ -1,0 +1,49 @@
+display_information:
+  name: CLI for Slack (unofficial)
+  description: 'Unofficial CLI for the Slack Web API. Collects no data.'
+  long_description: "CLI for Slack (unofficial) is an open-source (MIT) command-line client for the Slack Web API, for people and coding agents. It is not made, affiliated with, or endorsed by Slack Technologies. Every Web API method a user token can call is a typed command, generated from Slack's public method reference. Sign-in uses public PKCE OAuth with a loopback redirect to your own computer: there is no client secret and no server. Your token is stored only on your computer, requests go only to slack.com, and no data is collected; the developers never receive your token, messages, or any other workspace data. The source code is the privacy policy and the terms: https://github.com/alleneubank/slack-cli (see PRIVACY.md). It is provided as is, without warranty of any kind. Use it at your own risk."
+  background_color: '#2c2d30'
+oauth_config:
+  redirect_urls:
+    - http://127.0.0.1:8912/callback
+    - http://localhost:8912/callback
+  scopes:
+    user:
+      - canvases:read
+      - canvases:write
+      - channels:history
+      - channels:read
+      - channels:write
+      - chat:write
+      - emoji:read
+      - files:read
+      - files:write
+      - groups:history
+      - groups:read
+      - groups:write
+      - im:history
+      - im:read
+      - im:write
+      - lists:read
+      - lists:write
+      - mpim:history
+      - mpim:read
+      - mpim:write
+      - reactions:read
+      - reactions:write
+      - search:read
+      - search:read.files
+      - search:read.im
+      - search:read.mpim
+      - search:read.private
+      - search:read.public
+      - search:read.users
+      - users:read
+      - users:read.email
+  pkce_enabled: true
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+  app_level_token_rotation_enabled: false
+  is_mcp_enabled: false

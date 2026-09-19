@@ -1,0 +1,7 @@
+{
+  "threshold": 10,
+  "minLines": 25,
+  "minTokens": 150,
+  "reporters": ["console"],
+  "ignore": ["**/catalog.json"]
+}
