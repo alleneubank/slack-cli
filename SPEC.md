@@ -235,8 +235,14 @@ output.
   argument's description rather than generated example commands, which would
   omit arguments the docs mark optional but a call needs (`text` for
   `chat.postMessage`).
-- Local `slack-app-manifest.yaml` is the Slack app source of truth. `slack login`
-  requests read scopes; `slack login --write` also requests write scopes.
+- Local `slack-app-manifest.yaml` is the Slack app source of truth and lists
+  exactly the scopes login requests. Login requests every user scope a catalog
+  method accepts that Slack lets a distributed app request in a standard
+  workspace: plain `slack login` requests only scopes no state-changing method
+  accepts, and `slack login --write` adds the rest. Left out: `admin.*`
+  (Enterprise organizations only), `admin` (only admin installers can grant
+  it, and it also grants the SCIM API), and `client`, `identity:read`,
+  `openid`, and `tokens.basic` (Slack refuses the request with them).
 
 ## Risk tags
 
@@ -260,6 +266,9 @@ output.
   the skill is small and states the CLI's exit codes; `skills add` installs it)
 - REQ-AUTH-003 (redirect page, state, paste) — `src/login.test.ts` imports the
   page's `docs/callback/relay.js`; a live login in the test workspace
+- Login scopes — `src/login.test.ts` (plain login requests no scope a
+  state-changing method accepts; the manifest lists exactly the requested
+  scopes)
 - REQ-AUTH-001 / REQ-AUTH-002 / REQ-AUTH-003 / REQ-AUTH-004 / REQ-AUTH-005 / REQ-AUTH-006 —
   `src/create-cli.test.ts`, `src/credentials.test.ts`, `src/login.test.ts`,
   a live refresh

@@ -128,20 +128,33 @@ export const OAUTH_CALLBACK_FAILURE_HTML: string = `<!doctype html>
 </html>
 `
 
+/**
+ * User scopes that catalog methods accept and Slack lets this app request, split so plain
+ * `slack login` grants nothing a state-changing method accepts. Left out: `admin.*` (Enterprise
+ * organizations only), `admin` (admin installers only; it also grants the SCIM API), and
+ * `client`, `identity:read`, `openid`, and `tokens.basic`, which Slack refuses alongside the rest.
+ */
 export const OAUTH_READ_SCOPES: readonly string[] = [
+  'bookmarks:read',
+  'calls:read',
   'canvases:read',
   'channels:history',
   'channels:read',
+  'dnd:read',
   'emoji:read',
   'files:read',
   'groups:history',
   'groups:read',
+  'hosting:read',
   'im:history',
   'im:read',
   'lists:read',
   'mpim:history',
   'mpim:read',
+  'pins:read',
   'reactions:read',
+  'reminders:read',
+  'remote_files:read',
   'search:read',
   'search:read.files',
   'search:read.im',
@@ -149,20 +162,44 @@ export const OAUTH_READ_SCOPES: readonly string[] = [
   'search:read.private',
   'search:read.public',
   'search:read.users',
+  'stars:read',
+  'team.billing:read',
+  'team.preferences:read',
+  'team:read',
+  'usergroups:read',
+  'users.profile:read',
   'users:read',
   'users:read.email',
 ]
 
 export const OAUTH_WRITE_SCOPES: readonly string[] = [
+  'app_configurations:write',
+  'bookmarks:write',
+  'calls:write',
   'canvases:write',
   'channels:write',
+  'channels:write.invites',
+  'channels:write.topic',
   'chat:write',
+  'dnd:write',
   'files:write',
   'groups:write',
+  'groups:write.invites',
+  'groups:write.topic',
   'im:write',
+  'im:write.topic',
+  'links:write',
   'lists:write',
   'mpim:write',
+  'mpim:write.topic',
+  'pins:write',
   'reactions:write',
+  'reminders:write',
+  'remote_files:share',
+  'stars:write',
+  'usergroups:write',
+  'users.profile:write',
+  'users:write',
 ]
 
 /** Scopes requested at login. Write scopes are opt-in. */

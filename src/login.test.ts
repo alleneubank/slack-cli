@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 
 import { LOOPBACK_CALLBACK_URL, relayAction } from '../docs/callback/relay.js'
+import catalogJson from './catalog.json' with { type: 'json' }
+import { SLACK_METHOD_FAMILIES, slackMethods } from './methods.js'
 import {
   authorizeSlackUser,
   oauthScopes,
@@ -9,10 +12,13 @@ import {
   OAUTH_CALLBACK_FAILURE_HTML,
   OAUTH_CALLBACK_SUCCESS_HTML,
   OAUTH_LOOPBACK_URL,
+  OAUTH_READ_SCOPES,
   OAUTH_REDIRECT_URI,
   OAUTH_TOKEN_URL,
+  OAUTH_WRITE_SCOPES,
   type CodeDelivery,
 } from './oauth.js'
+import type { Catalog } from './reference.js'
 
 const accessToken = 'tok-access-not-a-secret'
 const authCode = 'auth-code-not-a-secret'
@@ -119,6 +125,32 @@ describe('HTTPS redirect relay', () => {
         if (pasted.length > 0) expect(String(error)).not.toContain(pasted)
       }
     }
+  })
+})
+
+describe('login scopes', () => {
+  test('plain slack login requests no scope that a state-changing method accepts', () => {
+    const mutating = new Set(
+      SLACK_METHOD_FAMILIES.flatMap((family) => slackMethods(family))
+        .filter((method) => method.mutates)
+        .map((method) => method.name),
+    )
+    const writeCapable = (catalogJson as Catalog).methods
+      .filter((method) => mutating.has(method.name))
+      .flatMap((method) => method.scopes.user.map((scope) => `${method.name} ${scope}`))
+      .filter((entry) => OAUTH_READ_SCOPES.includes(entry.split(' ')[1]!))
+    expect(writeCapable).toEqual([])
+  })
+
+  test('the app manifest lists exactly the scopes login requests', () => {
+    const manifest = readFileSync(new URL('../slack-app-manifest.yaml', import.meta.url), 'utf8')
+    const heading = '\n    user:\n'
+    const item = '      - '
+    expect(manifest).toContain(heading)
+    const lines = manifest.slice(manifest.indexOf(heading) + heading.length).split('\n')
+    const end = lines.findIndex((line) => !line.startsWith(item))
+    const listed = lines.slice(0, end).map((line) => line.slice(item.length))
+    expect(listed.toSorted()).toEqual([...OAUTH_READ_SCOPES, ...OAUTH_WRITE_SCOPES].toSorted())
   })
 })
 
