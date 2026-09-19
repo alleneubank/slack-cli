@@ -130,6 +130,7 @@ describe('HTTPS redirect relay', () => {
 
 describe('login scopes', () => {
   test('plain slack login requests no scope that a state-changing method accepts', () => {
+    // Only as complete as `mutates`: a `:write` scope or an entry in the overlay's MUTATING_METHODS.
     const mutating = new Set(
       SLACK_METHOD_FAMILIES.flatMap((family) => slackMethods(family))
         .filter((method) => method.mutates)

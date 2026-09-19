@@ -727,6 +727,7 @@ describe('error contract', () => {
     ['search:read', 'slack login'],
     ['users.profile:read', 'slack login'],
     ['usergroups:write', 'slack login --write'],
+    ['admin,users.profile:read', 'slack login'],
   ])('a missing %s scope suggests %s', async (needed, command) => {
     const fetch = () => Response.json({ ok: false, error: 'missing_scope', needed })
     const result = await run(cli({ ...withToken(), fetch }), read)
