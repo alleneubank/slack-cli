@@ -31,13 +31,19 @@ slack --help
 ```sh
 slack login          # read scopes
 slack login --write  # also write scopes: messages, reactions, files, channels
+slack login --paste  # on a machine the browser cannot reach, such as over SSH
 ```
 
 Login prints an authorize URL and opens your browser. It uses public OAuth
-with PKCE and a loopback redirect (`http://127.0.0.1:8912/callback`) against
-the project's Slack app, "CLI for Slack (unofficial)". There is no client
-secret and no server. The token goes from Slack straight to your machine; the
-app's developers never receive it.
+with PKCE against the project's Slack app, "CLI for Slack (unofficial)". There
+is no client secret and no server. Slack requires an HTTPS redirect for
+distributed apps, so it redirects to a static page,
+<https://alleneubank.github.io/slack-cli/callback/> (source in
+[`docs/callback/`](docs/callback/)), which hands the one-time code to the CLI's
+listener on `http://127.0.0.1:8912/callback`. With `--paste`, the page shows
+the code and the CLI reads it from the terminal instead. The code is useless
+without the PKCE verifier, which never leaves your machine, and the token goes
+from Slack straight to your machine; the app's developers never receive it.
 
 Each login adds the authorized workspace to
 `~/.config/slack-cli/credentials.json` (mode 0600) and makes it current.
@@ -56,9 +62,11 @@ Slack keeps the scopes a user granted this app at earlier logins: after one
 `slack login --write`, a later plain `slack login` still returns a token with
 write scopes. `slack workspaces list` shows what the token carries.
 
-Slack issues rotating tokens that expire after 12 hours. The CLI refreshes a
-stored token shortly before it expires, and once if Slack answers
-`token_expired`, then saves the new token pair under a file lock.
+Tokens do not expire. `slack auth revoke` invalidates the current token at
+Slack; `slack logout` only removes it from this machine. A rotating token
+stored by an earlier version (12-hour `xoxe.` tokens) is still refreshed
+shortly before it expires, and once if Slack answers `token_expired`, and the
+new pair is saved under a file lock.
 
 ### Using your own Slack app
 
@@ -73,6 +81,10 @@ manifest"), then point the CLI at its client id:
 export SLACK_CLIENT_ID=1234567890.1234567890
 slack login
 ```
+
+The manifest registers the same HTTPS redirect page, which works for any
+client id, and keeps token rotation off so tokens need no client secret to
+refresh.
 
 ## Usage
 
@@ -143,7 +155,9 @@ instructions.
 The project collects no data: no analytics, no telemetry, and no server
 between you and Slack. The source code is the privacy policy and the terms.
 The software is provided as is, without warranty of any kind; use it at your
-own risk. See [PRIVACY.md](PRIVACY.md).
+own risk. See the [privacy policy](https://alleneubank.github.io/slack-cli/privacy/)
+and [support](https://alleneubank.github.io/slack-cli/support/) pages, whose
+source is in [`docs/`](docs/).
 
 ## How commands are generated
 

@@ -1,0 +1,229 @@
+:root {
+  color-scheme: dark;
+  --ink: #f4f1ea;
+  --muted: #c8c2b6;
+  --faint: #8a857a;
+  --line: #3a3833;
+  --panel: #252422;
+  --ground: #1c1b19;
+  --accent: #e0922f;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+}
+body {
+  font:
+    17px/1.6 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  color: var(--ink);
+  background: radial-gradient(1200px 600px at 50% -10%, #3d3a34 0%, transparent 55%), var(--ground);
+  min-height: 100vh;
+}
+a {
+  color: var(--ink);
+  text-decoration-color: #5c574e;
+  text-underline-offset: 3px;
+}
+a:hover {
+  text-decoration-color: var(--ink);
+}
+code,
+pre {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+:not(pre) > code {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #2c2b28;
+}
+pre {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #151412;
+  line-height: 1.5;
+}
+pre .prompt {
+  color: var(--accent);
+  user-select: none;
+}
+pre .comment {
+  color: var(--faint);
+}
+.page {
+  width: min(52rem, 100% - 2.5rem);
+  margin: 0 auto;
+  padding: 3rem 0 2rem;
+}
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  font-size: 0.95rem;
+}
+.site-nav .home {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-right: auto;
+  font-weight: 600;
+  text-decoration: none;
+}
+.site-nav img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.hero img {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+}
+h1 {
+  margin: 0;
+  font-size: 2.1rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+h2 {
+  margin: 2.75rem 0 0.75rem;
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+}
+h3 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.05rem;
+}
+p,
+li {
+  color: var(--muted);
+}
+.lede {
+  margin: 0.4rem 0 0;
+  font-size: 1.15rem;
+}
+.notice {
+  margin: 1.5rem 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.notice p {
+  margin: 0;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.grid > div {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.grid h3 {
+  margin-top: 0;
+}
+.grid p {
+  margin: 0;
+}
+figure {
+  margin: 1.5rem 0;
+}
+figure img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+figcaption {
+  margin-top: 0.5rem;
+  color: var(--faint);
+  font-size: 0.9rem;
+}
+.site-footer {
+  margin-top: 4rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+.site-footer p {
+  margin: 0.25rem 0;
+  color: var(--faint);
+}
+
+/* The OAuth redirect page. */
+.center {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.card {
+  width: min(32rem, 100%);
+  padding: 2.25rem 2rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+.card h1 {
+  margin-bottom: 0.5rem;
+  font-size: 1.35rem;
+}
+.card img {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+}
+.code {
+  display: block;
+  margin: 1.25rem 0 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #151412;
+  font-size: 0.95rem;
+  word-break: break-all;
+  user-select: all;
+}
+button {
+  padding: 0.55rem 1.2rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #1c1b19;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.small {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--faint);
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="robots" content="noindex" />
+    <title>Signing in · CLI for Slack (unofficial)</title>
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <script type="module" src="callback.js"></script>
+  </head>
+  <body class="center">
+    <main class="card">
+      <img src="../assets/icon.png" alt="" />
+
+      <section id="forward" hidden>
+        <h1>Returning to your terminal…</h1>
+        <p>
+          If this page stays, the browser could not reach <code>slack login</code> on this computer.
+          If the CLI runs on another machine, run <code>slack login --paste</code> there instead.
+        </p>
+      </section>
+
+      <section id="paste" hidden>
+        <h1>Copy this code</h1>
+        <p>Paste it into the terminal where <code>slack login --paste</code> is waiting.</p>
+        <code id="code" class="code"></code>
+        <button id="copy" type="button">Copy code</button>
+        <p class="small">
+          The code works once, expires within minutes, and only completes the login that requested
+          it.
+        </p>
+      </section>
+
+      <section id="failed" hidden>
+        <h1>Sign-in didn't finish</h1>
+        <p>Slack returned <code id="error"></code>. Run <code>slack login</code> again.</p>
+      </section>
+
+      <section id="install" hidden>
+        <h1>CLI for Slack (unofficial)</h1>
+        <p>
+          This page completes <code>slack login</code> in the terminal. To start, install the CLI
+          and sign in from there:
+        </p>
+        <pre><span class="prompt">$ </span>npm install --global @alleneubank/slack-cli
+<span class="prompt">$ </span>slack login</pre>
+        <p><a href="../">About the CLI</a></p>
+      </section>
+
+      <noscript>
+        <h1>JavaScript is off</h1>
+        <p>
+          This page needs JavaScript to hand the sign-in code to <code>slack login</code>. It runs
+          only this page's own script.
+        </p>
+      </noscript>
+
+      <p class="small">
+        Not made, affiliated with, or endorsed by Slack. <a href="../privacy/">Privacy</a> ·
+        <a href="https://github.com/alleneubank/slack-cli">Source</a>
+      </p>
+    </main>
+  </body>
+</html>

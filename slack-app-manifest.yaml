@@ -1,12 +1,11 @@
 display_information:
   name: CLI for Slack (unofficial)
   description: 'Unofficial CLI for the Slack Web API. Collects no data.'
-  long_description: "CLI for Slack (unofficial) is an open-source (MIT) command-line client for the Slack Web API, for people and coding agents. It is not made, affiliated with, or endorsed by Slack Technologies. Every Web API method a user token can call is a typed command, generated from Slack's public method reference. Sign-in uses public PKCE OAuth with a loopback redirect to your own computer: there is no client secret and no server. Your token is stored only on your computer, requests go only to slack.com, and no data is collected; the developers never receive your token, messages, or any other workspace data. The source code is the privacy policy and the terms: https://github.com/alleneubank/slack-cli (see PRIVACY.md). It is provided as is, without warranty of any kind. Use it at your own risk."
+  long_description: "CLI for Slack (unofficial) is an open-source (MIT) command-line client for the Slack Web API, for people and coding agents. It is not made, affiliated with, or endorsed by Slack Technologies. Every Web API method a user token can call is a typed command, generated from Slack's public method reference. Sign-in uses public PKCE OAuth: a static page on GitHub Pages hands Slack's one-time code to the CLI on your computer, and there is no client secret and no server. Your token is stored only on your computer, requests go only to slack.com, and no data is collected; the developers never receive your token, messages, or any other workspace data. The source code is the privacy policy and the terms: https://github.com/alleneubank/slack-cli (privacy policy: https://alleneubank.github.io/slack-cli/privacy/). It is provided as is, without warranty of any kind. Use it at your own risk."
   background_color: '#2c2d30'
 oauth_config:
   redirect_urls:
-    - http://127.0.0.1:8912/callback
-    - http://localhost:8912/callback
+    - https://alleneubank.github.io/slack-cli/callback/
   scopes:
     user:
       - canvases:read

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createInterface } from 'node:readline/promises'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
@@ -14,7 +15,14 @@ import {
 import { commandError } from './errors.js'
 import { fileCredentialStore, type CredentialStore, type TeamCredentials } from './credentials.js'
 import { SLACK_METHOD_FAMILIES } from './methods.js'
-import { authorizeSlackUser, oauthScopes, OAUTH_TIMEOUT_MS, waitForLoopbackCode } from './oauth.js'
+import {
+  authorizeSlackUser,
+  oauthScopes,
+  parsePastedCode,
+  OAUTH_TIMEOUT_MS,
+  waitForLoopbackCode,
+  type CodeDelivery,
+} from './oauth.js'
 import { SOURCE_URL, VERSION } from './version.js'
 import { SLACK_API_ORIGIN, slackWebApiFamily } from './web-api.js'
 import { workspacesCli } from './workspaces.js'
@@ -27,7 +35,10 @@ export const SLACK_OAUTH_CLIENT_ID: string = '12085301315143.12095834471045'
 /** Browser side of `slack login`. */
 export type OauthHost = {
   openUrl: (url: string) => Promise<void>
+  /** Receives the code the redirect page forwards to the loopback listener. */
   waitForCode: (input: { state: string; timeoutMs: number }) => Promise<{ code: string }>
+  /** Reads the code the user pastes from the redirect page (`slack login --paste`). */
+  readPastedCode: (input: { timeoutMs: number }) => Promise<string>
   write?: (text: string) => void
   randomBytes?: (size: number) => Uint8Array
   timeoutMs?: number | undefined
@@ -115,6 +126,12 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
           .boolean()
           .default(false)
           .describe('Also request write scopes (messages, files, channels, ...)'),
+        paste: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Show the code in the browser and read it here, for a machine the browser cannot reach (SSH)',
+          ),
       }),
       output: z.object({
         ok: z.literal(true),
@@ -129,11 +146,16 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
       async run(context) {
         const oauth = deps.oauth ?? defaultOauthHost()
         const write = oauth.write ?? ((text: string) => process.stdout.write(text))
+        const delivery: CodeDelivery = context.options.paste ? 'paste' : 'loopback'
         const issued = await authorizeSlackUser({
           clientId,
           fetch,
+          delivery,
           openUrl: oauth.openUrl,
-          waitForCode: oauth.waitForCode,
+          waitForCode:
+            delivery === 'paste'
+              ? async (input) => ({ code: await oauth.readPastedCode(input) })
+              : oauth.waitForCode,
           onAuthorizeUrl: (url) => {
             write(`Authorize Slack:\n${url}\n`)
           },
@@ -235,5 +257,16 @@ function defaultOauthHost(): OauthHost {
       else await execFileAsync('xdg-open', [url])
     },
     waitForCode: (input) => waitForLoopbackCode(input),
+    async readPastedCode({ timeoutMs }) {
+      const terminal = createInterface({ input: process.stdin, output: process.stderr })
+      try {
+        const pasted = await terminal.question('Paste the code shown in the browser: ', {
+          signal: AbortSignal.timeout(timeoutMs),
+        })
+        return parsePastedCode(pasted)
+      } finally {
+        terminal.close()
+      }
+    },
   }
 }

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy policy and terms · CLI for Slack (unofficial)</title>
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="page">
+      <nav class="site-nav">
+        <a class="home" href="../"
+          ><img src="../assets/icon.png" alt="" />CLI for Slack (unofficial)</a
+        >
+        <a href="../support/">Support</a>
+        <a href="https://github.com/alleneubank/slack-cli">Source</a>
+      </nav>
+
+      <h1>Privacy policy and terms</h1>
+      <p>
+        This policy covers the <code>slack</code> command from the npm package
+        <code>@alleneubank/slack-cli</code>, its Slack app "CLI for Slack (unofficial)", and this
+        website. The project is maintained by Allen Eubank (Unruly Systems) and is not made,
+        affiliated with, or endorsed by Slack Technologies, LLC.
+      </p>
+      <div class="notice">
+        <p>
+          The project collects no data. The source code at
+          <a href="https://github.com/alleneubank/slack-cli">github.com/alleneubank/slack-cli</a> is
+          the privacy policy and the terms: what the software does is exactly what the code does.
+        </p>
+      </div>
+
+      <h2>What data is collected</h2>
+      <p>None. The project has no server, database, analytics, telemetry, or crash reporting.</p>
+      <ul>
+        <li>
+          <strong>Your Slack token</strong> is stored only on your computer, in
+          <code>~/.config/slack-cli/credentials.json</code> with permissions that let only your user
+          account read it, or in the <code>SLACK_TOKEN</code> environment variable if you set it.
+          The developers never receive it.
+        </li>
+        <li>
+          <strong>Your Slack data</strong> (messages, files, channels, people) goes directly between
+          your computer and <code>https://slack.com</code> when you run a command. It is not sent to
+          the developers or anyone else.
+        </li>
+        <li>
+          <strong>The sign-in page</strong>
+          (<code>https://alleneubank.github.io/slack-cli/callback/</code>) receives a one-time
+          authorization code from Slack in its address and, in your browser, passes it to
+          <code>slack login</code> on your computer or shows it for you to paste. The page has no
+          analytics and sends the code nowhere else. The code expires within minutes, works once,
+          and cannot be used without a secret that <code>slack login</code> generates and keeps on
+          your computer. The page is hosted on GitHub Pages; GitHub may keep standard request logs
+          under the
+          <a
+            href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement"
+            >GitHub Privacy Statement</a
+          >.
+        </li>
+        <li>
+          <strong>Updates</strong>: the CLI does not check for updates in the background.
+          <code>slack --update</code> contacts the npm registry only when you run it.
+        </li>
+        <li>
+          <strong>Support email</strong>: if you write to us, we receive what you send and use it
+          only to answer you.
+        </li>
+      </ul>
+
+      <h2>How data is used</h2>
+      <p>
+        The CLI uses your token only to call the Slack Web API methods you run, on your behalf. The
+        developers do not use, receive, sell, or share any Slack data.
+      </p>
+
+      <h2>How long data is kept</h2>
+      <ul>
+        <li>
+          Your token stays on your computer until you remove it with <code>slack logout</code> (one
+          workspace) or <code>slack logout --all</code>, or delete the credentials file.
+        </li>
+        <li>
+          Tokens do not expire on their own. <code>slack auth revoke</code> invalidates the current
+          token at Slack, and a workspace admin can remove the app from the workspace's app
+          settings.
+        </li>
+        <li>Support emails are kept only as long as needed to answer them, then deleted.</li>
+      </ul>
+
+      <h2>Access, transfer, and deletion</h2>
+      <p>
+        The developers hold no Slack data about you, so there is nothing for us to access, transfer,
+        or delete. Everything the CLI stores is in a file on your own computer that you can read,
+        move, or delete at any time. To delete a support email you sent, or for any other privacy
+        request, including under the GDPR or CCPA, write to the address below.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Email <a href="mailto:allen@unrulysystems.com">allen@unrulysystems.com</a>. We answer within
+        two business days.
+      </p>
+
+      <h2>Terms</h2>
+      <p>
+        The software is released under the
+        <a href="https://github.com/alleneubank/slack-cli/blob/main/LICENSE">MIT License</a> and is
+        provided "as is", without warranty of any kind. Use it at your own risk. The authors are not
+        liable for any claim, damages, or other liability arising from its use. Your use of Slack
+        remains subject to Slack's own terms and your workspace's policies.
+      </p>
+
+      <footer class="site-footer">
+        <p>Last updated September 18, 2026.</p>
+        <p>
+          Slack is a trademark of Slack Technologies, LLC. This project is not affiliated with
+          Slack.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

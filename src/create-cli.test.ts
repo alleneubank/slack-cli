@@ -416,6 +416,61 @@ describe('workspaces', () => {
     expect(slack.calls[0]?.headers.get('authorization')).toBe(`Bearer ${accessToken}`)
   })
 
+  test('login --paste reads the code from the terminal and stores a long-lived token', async () => {
+    const file = credentialsFile()
+    const exchanged: URLSearchParams[] = []
+    const terminal: string[] = []
+    const result = await run(
+      cli({
+        file,
+        fetch: async (request) => {
+          exchanged.push(new URLSearchParams(await request.text()))
+          return Response.json({
+            ok: true,
+            access_token: 'xoxp-long-lived-not-a-secret',
+            token_type: 'user',
+            scope: 'channels:read,users:read',
+            team: { id: 'T3', name: 'Remote' },
+            authed_user: { id: 'U3' },
+          })
+        },
+        oauth: {
+          timeoutMs: 1_000,
+          write: (text) => {
+            terminal.push(text.startsWith('Authorize Slack:') ? 'authorize url' : text)
+          },
+          async openUrl() {},
+          async waitForCode() {
+            throw new Error('paste login must not listen on the loopback port')
+          },
+          async readPastedCode() {
+            terminal.push('paste prompt')
+            return 'pasted-code-not-a-secret'
+          },
+        },
+      }),
+      ['login', '--paste', '--json'],
+    )
+    expect(result.exitCode).toBeUndefined()
+    expect(result.json()).toEqual({
+      ok: true,
+      teamId: 'T3',
+      teamName: 'Remote',
+      userId: 'U3',
+      scopes: ['channels:read', 'users:read'],
+    })
+    expect(result.output).not.toMatch(/not-a-secret/)
+    expect(terminal).toEqual(['authorize url', 'paste prompt'])
+    expect(exchanged[0]?.get('code')).toBe('pasted-code-not-a-secret')
+    expect(readCredentials(file).teams['T3']).toEqual({
+      accessToken: 'xoxp-long-lived-not-a-secret',
+      clientId: SLACK_OAUTH_CLIENT_ID,
+      userId: 'U3',
+      teamName: 'Remote',
+      scopes: ['channels:read', 'users:read'],
+    })
+  })
+
   test('login adds a workspace, keeps the others, and makes it current', async () => {
     const file = credentialsFile(rotatingStore({ T1: { accessToken } }))
     const opened: string[] = []

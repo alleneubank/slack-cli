@@ -6,10 +6,23 @@ import { SOURCE_URL } from './version.js'
 
 export const OAUTH_AUTHORIZE_URL: string = 'https://slack.com/oauth/v2_user/authorize'
 export const OAUTH_TOKEN_URL: string = 'https://slack.com/api/oauth.v2.user.access'
-export const OAUTH_REDIRECT_PORT: number = 8912
-export const OAUTH_REDIRECT_PATH: string = '/callback'
 export const OAUTH_TIMEOUT_MS: number = 300_000
-export const OAUTH_REDIRECT_URI: string = `http://127.0.0.1:${OAUTH_REDIRECT_PORT}${OAUTH_REDIRECT_PATH}`
+/**
+ * Slack requires an HTTPS redirect for distributed apps. This static page
+ * (`docs/callback/` in this repository) forwards the code to the loopback
+ * listener, or shows it for `slack login --paste`, according to the state.
+ */
+export const OAUTH_REDIRECT_URI: string = 'https://alleneubank.github.io/slack-cli/callback/'
+export const OAUTH_LOOPBACK_PORT: number = 8912
+export const OAUTH_LOOPBACK_PATH: string = '/callback'
+export const OAUTH_LOOPBACK_URL: string = `http://127.0.0.1:${OAUTH_LOOPBACK_PORT}${OAUTH_LOOPBACK_PATH}`
+
+/**
+ * How the CLI receives the code: from the redirect page through the loopback
+ * listener, or pasted into the terminal when the browser cannot reach this
+ * machine. The state carries it so the redirect page knows which to do.
+ */
+export type CodeDelivery = 'loopback' | 'paste'
 
 const callbackPageStyle = `
 :root { color-scheme: dark; }
@@ -185,19 +198,19 @@ export type AuthorizeSlackUserOptions = {
   randomBytes?: (size: number) => Uint8Array
   timeoutMs?: number | undefined
   scope?: string | undefined
-  redirectUri?: string | undefined
+  delivery?: CodeDelivery | undefined
 }
 
-/** Slack user OAuth with public PKCE: browser consent, loopback code, code exchange. */
+/** Slack user OAuth with public PKCE: browser consent, relayed code, code exchange. */
 export async function authorizeSlackUser(
   options: AuthorizeSlackUserOptions,
 ): Promise<OauthToken & { teamId: string }> {
   const randomBytes = options.randomBytes ?? defaultRandomBytes
   const timeoutMs = options.timeoutMs ?? OAUTH_TIMEOUT_MS
-  const redirectUri = options.redirectUri ?? OAUTH_REDIRECT_URI
+  const redirectUri = OAUTH_REDIRECT_URI
   const scope = options.scope ?? oauthScopes(false)
   const verifier = base64url(randomBytes(32))
-  const state = base64url(randomBytes(16))
+  const state = `${options.delivery ?? 'loopback'}.${base64url(randomBytes(16))}`
   const challenge = base64url(createHash('sha256').update(verifier).digest())
   const authorizeUrl = new URL(OAUTH_AUTHORIZE_URL)
   authorizeUrl.searchParams.set('response_type', 'code')
@@ -209,8 +222,10 @@ export async function authorizeSlackUser(
   authorizeUrl.searchParams.set('scope', scope)
 
   const authorize = authorizeUrl.toString()
-  const codePromise = options.waitForCode({ state, timeoutMs })
+  // Announce first so a paste prompt follows the URL; wait before the browser
+  // opens so the loopback listener is up when the redirect arrives.
   options.onAuthorizeUrl?.(authorize)
+  const codePromise = options.waitForCode({ state, timeoutMs })
   try {
     await options.openUrl(authorize)
   } catch {
@@ -248,14 +263,26 @@ export async function refreshSlackUserToken(options: {
   )
 }
 
+const pastedCode = /^[A-Za-z0-9._-]{8,512}$/
+
+/** Validates a code pasted into the terminal; the error never repeats the input. */
+export function parsePastedCode(pasted: string): string {
+  const code = pasted.trim()
+  if (!pastedCode.test(code))
+    throw new Error(
+      'The pasted text is not a Slack authorization code; copy the code shown in the browser',
+    )
+  return code
+}
+
 export async function waitForLoopbackCode(input: {
   state: string
   timeoutMs: number
   port?: number | undefined
   path?: string | undefined
 }): Promise<{ code: string }> {
-  const port = input.port ?? OAUTH_REDIRECT_PORT
-  const path = input.path ?? OAUTH_REDIRECT_PATH
+  const port = input.port ?? OAUTH_LOOPBACK_PORT
+  const path = input.path ?? OAUTH_LOOPBACK_PATH
   return new Promise((resolve, reject) => {
     let settled = false
     const server = createServer((req, res) => {

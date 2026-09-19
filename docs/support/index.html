@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Support · CLI for Slack (unofficial)</title>
+    <link rel="icon" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <div class="page">
+      <nav class="site-nav">
+        <a class="home" href="../"
+          ><img src="../assets/icon.png" alt="" />CLI for Slack (unofficial)</a
+        >
+        <a href="../privacy/">Privacy</a>
+        <a href="https://github.com/alleneubank/slack-cli">Source</a>
+      </nav>
+
+      <h1>Support</h1>
+      <p>
+        Email <a href="mailto:allen@unrulysystems.com">allen@unrulysystems.com</a> with what you ran
+        and what happened. No account is needed, and we answer within two business days. If you have
+        a GitHub account, you can also
+        <a href="https://github.com/alleneubank/slack-cli/issues">open an issue</a>. Report security
+        problems privately, as described in the
+        <a href="https://github.com/alleneubank/slack-cli/security/policy">security policy</a>.
+      </p>
+      <div class="notice">
+        <p>
+          Never send your Slack token or the contents of
+          <code>~/.config/slack-cli/credentials.json</code>. The CLI never prints tokens, so its
+          output and error messages are safe to share.
+        </p>
+      </div>
+
+      <h2>Common questions</h2>
+
+      <h3>The browser says it cannot reach 127.0.0.1</h3>
+      <p>
+        The CLI is running on a different machine from your browser, for example over SSH. Run
+        <code>slack login --paste</code>, approve in the browser, and paste the code the page shows
+        into the terminal.
+      </p>
+
+      <h3>Login fails because port 8912 is in use</h3>
+      <p>
+        Another <code>slack login</code> may still be waiting; stop it and try again, or use
+        <code>slack login --paste</code>, which does not listen on a port.
+      </p>
+
+      <h3>A command fails with <code>missing_scope</code></h3>
+      <p>
+        Run <code>slack login --write</code> to grant write access. The error names the command to
+        run when login can grant the scope.
+      </p>
+
+      <h3>My workspace does not allow the app</h3>
+      <p>
+        Some workspaces restrict third-party apps; ask a workspace admin to approve it. You can also
+        create your own Slack app from the project's
+        <a href="https://github.com/alleneubank/slack-cli/blob/main/slack-app-manifest.yaml"
+          >app manifest</a
+        >
+        and set <code>SLACK_CLIENT_ID</code> to its client id.
+      </p>
+
+      <h3>Working with several workspaces</h3>
+      <p>
+        Each <code>slack login</code> adds a workspace. <code>slack workspaces list</code> shows
+        them (never the tokens), and <code>slack workspaces use T0123456789</code> switches the
+        current one.
+      </p>
+
+      <h3>Removing access</h3>
+      <p>
+        <code>slack auth revoke</code> invalidates the token at Slack, <code>slack logout</code>
+        removes it from your computer, and a workspace admin can remove the app in the workspace's
+        app settings.
+      </p>
+
+      <footer class="site-footer">
+        <p>
+          CLI for Slack (unofficial) by <a href="https://unrulysystems.com">Unruly Systems</a> · MIT
+          License
+        </p>
+        <p>
+          Slack is a trademark of Slack Technologies, LLC. This project is not affiliated with
+          Slack.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CLI for Slack (unofficial)</title>
+    <meta
+      name="description"
+      content="An open-source command-line client for the Slack Web API, for people and coding agents. Not affiliated with Slack."
+    />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="stylesheet" href="assets/site.css" />
+  </head>
+  <body>
+    <div class="page">
+      <nav class="site-nav">
+        <a class="home" href="./"><img src="assets/icon.png" alt="" />CLI for Slack (unofficial)</a>
+        <a href="#install">Install</a>
+        <a href="privacy/">Privacy</a>
+        <a href="support/">Support</a>
+        <a href="https://github.com/alleneubank/slack-cli">Source</a>
+      </nav>
+
+      <header class="hero">
+        <img src="assets/icon.png" alt="CLI for Slack icon: a terminal prompt in a speech bubble" />
+        <div>
+          <h1>CLI for Slack (unofficial)</h1>
+          <p class="lede">
+            Work in Slack from the terminal. Every Slack Web API method your user token can call is
+            a typed command, for people and for coding agents.
+          </p>
+        </div>
+      </header>
+
+      <div class="notice">
+        <p>
+          An independent open-source project (MIT). It is not made, affiliated with, or endorsed by
+          Slack Technologies, LLC. It collects no data; see <a href="privacy/">Privacy</a>.
+        </p>
+      </div>
+
+      <h2>What it does in Slack</h2>
+      <div class="grid">
+        <div>
+          <h3>Post and reply</h3>
+          <p>
+            Send messages, reply in threads, and add reactions from a script or a terminal session.
+          </p>
+        </div>
+        <div>
+          <h3>Read and search</h3>
+          <p>
+            Read channel history and threads, search messages and files, and look up people, as JSON
+            you can pipe into other tools.
+          </p>
+        </div>
+        <div>
+          <h3>Files, canvases, and lists</h3>
+          <p>Upload and fetch files and work with canvases and lists using the same commands.</p>
+        </div>
+        <div>
+          <h3>Built for coding agents</h3>
+          <p>
+            Agents discover commands with <code>--help</code>, preview writes with
+            <code>--dry-run</code>, and act on documented exit codes.
+          </p>
+        </div>
+      </div>
+
+      <h2 id="install">Get started</h2>
+      <p>Requires Node.js 22 or later.</p>
+      <pre><span class="prompt">$ </span>npm install --global @alleneubank/slack-cli
+<span class="prompt">$ </span>slack login            <span class="comment"># read access</span>
+<span class="prompt">$ </span>slack login --write    <span class="comment"># also post, react, and upload</span></pre>
+      <p>
+        <code>slack login</code> opens Slack in your browser. Choose a workspace, review the
+        permissions, and select <strong>Allow</strong>. Your terminal finishes signing in.
+      </p>
+      <pre><span class="prompt">$ </span>slack conversations list --types public_channel --limit 20
+<span class="prompt">$ </span>slack conversations history C0123456789 --limit 20
+<span class="prompt">$ </span>slack chat postMessage C0123456789 --text 'Deploy finished'
+<span class="prompt">$ </span>slack search messages --query 'from:@alex release'</pre>
+      <p>
+        Method <code>a.b.c</code> is the command <code>slack a b c</code>, and each command's
+        <code>--help</code> lists its arguments, required scopes, and a link to Slack's reference.
+      </p>
+
+      <h3>For coding agents</h3>
+      <pre><span class="prompt">$ </span>slack skills add</pre>
+      <p>
+        Installs a short skill that tells coding agents how to use the CLI: find commands, page with
+        <code>--cursor</code>, preview writes with <code>--dry-run</code>, and treat message text as
+        data, not instructions.
+      </p>
+
+      <h2>How sign-in works</h2>
+      <ul>
+        <li>
+          Sign-in is public OAuth with PKCE. The app has no client secret, and this project runs no
+          server.
+        </li>
+        <li>
+          Slack sends a one-time code to <a href="callback/">this site's sign-in page</a>, which
+          passes it to <code>slack login</code> on your own computer. The code is useless without a
+          secret that never leaves your computer.
+        </li>
+        <li>
+          On a remote machine (for example over SSH), run <code>slack login --paste</code>: the page
+          shows the code and you paste it into the terminal.
+        </li>
+        <li>
+          Your token is stored only on your computer, in
+          <code>~/.config/slack-cli/credentials.json</code> (readable only by you). Every request
+          goes directly to <code>slack.com</code>.
+        </li>
+        <li>
+          <code>slack auth revoke</code> invalidates the token at Slack;
+          <code>slack logout</code> deletes it from your computer.
+        </li>
+      </ul>
+
+      <h2>Help</h2>
+      <p>
+        Email <a href="mailto:allen@unrulysystems.com">allen@unrulysystems.com</a> or see
+        <a href="support/">Support</a>. Read the <a href="privacy/">privacy policy and terms</a>.
+      </p>
+
+      <footer class="site-footer">
+        <p>
+          CLI for Slack (unofficial) by <a href="https://unrulysystems.com">Unruly Systems</a> ·
+          <a href="https://github.com/alleneubank/slack-cli">Source</a> ·
+          <a href="https://www.npmjs.com/package/@alleneubank/slack-cli">npm</a> · MIT License
+        </p>
+        <p>
+          Slack is a trademark of Slack Technologies, LLC. This project is not affiliated with
+          Slack.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
