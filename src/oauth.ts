@@ -353,7 +353,6 @@ export async function waitForLoopbackCode(input: {
         if (url.searchParams.get('state') !== input.state) {
           res.writeHead(400, { 'content-type': 'text/plain' })
           res.end('Authorization state mismatch.')
-          finish(new Error('OAuth state mismatch'))
           return
         }
         const oauthError = url.searchParams.get('error')

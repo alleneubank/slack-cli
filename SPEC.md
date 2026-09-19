@@ -78,13 +78,17 @@ output.
   Required arguments are
   required; `boolean`, `integer`, and `number` arguments are validated
   locally; every other type is a string passed through unchanged. Overlay
-  positionals replace their flags. Output is Slack's JSON object, unchanged.
+  positionals replace their flags. A local argument parse failure has code
+  `INVALID_ARGUMENT`, not `UNKNOWN`. Output is Slack's JSON object, unchanged.
 - **REQ-API-003** The request body is form-encoded and contains only the
   catalog's declared arguments for that method. `ok: false` is a command
   error whose code is Slack's `error` string. HTTP 429 is `RATE_LIMITED`,
   retryable, with Slack's `Retry-After` seconds. Any other non-2xx status is
   `HTTP_ERROR`, even when the body parses. A non-JSON body, or a body over
-  16 MiB, is `BAD_RESPONSE`. The token is never echoed.
+  16 MiB, is `BAD_RESPONSE`. When Slack rejects `SLACK_TOKEN`, including for
+  `missing_scope`, the failure says to fix or unset that environment variable
+  and does not suggest login, which cannot override it. The token is never
+  echoed.
 - **REQ-API-004** Without credentials, method commands fail with
   `AUTH_REQUIRED` and do not contact `slack.com`. `--help` and `--version`
   succeed and list `login` plus method families.
@@ -97,9 +101,11 @@ output.
   Slack's JSON, except incur's `_warnings` array when a string looks like a
   prompt injection.
 - **REQ-API-007** A failure exits 3 when retrying it unchanged may succeed
-  (`retryable: true`), 4 when a new `slack login` fixes it (no usable token,
-  Slack rejected the token, an unreadable credentials file, or a
-  `missing_scope` that login requests), and 1 otherwise. Exit-4 failures and
+  (`retryable: true`), 4 when a new `slack login` fixes it (no usable stored
+  token, Slack rejected a stored token, an unreadable credentials file, or a
+  `missing_scope` that login requests), and 1 otherwise. A rejected
+  `SLACK_TOKEN`, including one missing a scope, exits 1 because login cannot
+  override it. Exit-4 failures and
   `UNKNOWN_WORKSPACE` carry the command to run as a CTA. A timeout, network
   error, HTTP 5xx, or Slack `internal_error`/`fatal_error`/`service_unavailable`
   is retryable only for methods that do not mutate; for a write it says the
@@ -131,7 +137,9 @@ output.
   forwards only `code`, `state`, and `error`, and only to
   `http://127.0.0.1:8912/callback`, for a `loopback.` state; shows the code
   for a `paste.` state, then removes it from the address bar; and otherwise
-  shows install instructions. With `--paste` the CLI prints the authorize URL
+  shows install instructions. The loopback listener ignores callbacks whose
+  state does not match the active login and keeps waiting for the matching
+  callback until its deadline. With `--paste` the CLI prints the authorize URL
   before prompting, reads the code from the terminal, rejects text that is
   not code-shaped without echoing it, and does not listen on a port.
 - **REQ-AUTH-004** `slack login` adds or replaces the authorized workspace,

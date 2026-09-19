@@ -11,11 +11,13 @@ import {
   OAUTH_AUTHORIZE_URL,
   OAUTH_CALLBACK_FAILURE_HTML,
   OAUTH_CALLBACK_SUCCESS_HTML,
+  OAUTH_LOOPBACK_PORT,
   OAUTH_LOOPBACK_URL,
   OAUTH_READ_SCOPES,
   OAUTH_REDIRECT_URI,
   OAUTH_TOKEN_URL,
   OAUTH_WRITE_SCOPES,
+  waitForLoopbackCode,
   type CodeDelivery,
 } from './oauth.js'
 import type { Catalog } from './reference.js'
@@ -128,6 +130,19 @@ describe('HTTPS redirect relay', () => {
   })
 })
 
+async function fetchEventually(url: string): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      return await fetch(url)
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+  }
+  throw lastError
+}
+
 describe('login scopes', () => {
   test('plain slack login requests no scope that a state-changing method accepts', () => {
     // Only as complete as `mutates`: a `:write` scope or an entry in the overlay's MUTATING_METHODS.
@@ -156,6 +171,28 @@ describe('login scopes', () => {
 })
 
 describe('Slack user OAuth', () => {
+  test('a callback for another login does not stop the active login', async () => {
+    const port = OAUTH_LOOPBACK_PORT + 10_000
+    const codePromise = waitForLoopbackCode({
+      state: 'loopback.active-state',
+      timeoutMs: 1_000,
+      port,
+    })
+    void codePromise.catch(() => {})
+
+    const wrong = await fetchEventually(
+      `http://127.0.0.1:${port}/callback?state=loopback.stale-state&code=stale-code`,
+    )
+    expect(wrong.status).toBe(400)
+    expect(await wrong.text()).toBe('Authorization state mismatch.')
+
+    const matching = await fetchEventually(
+      `http://127.0.0.1:${port}/callback?state=loopback.active-state&code=active-code`,
+    )
+    expect(matching.status).toBe(200)
+    await expect(codePromise).resolves.toEqual({ code: 'active-code' })
+  })
+
   test('exchanges a loopback code for an access token and does not echo secrets', async () => {
     const opened: string[] = []
     const announced: string[] = []

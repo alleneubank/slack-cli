@@ -8,6 +8,8 @@ export type Failure = {
   retryable?: boolean | undefined
   /** Scopes Slack named for `missing_scope`; any one of them is enough. */
   neededScopes?: string[] | undefined
+  /** Where the rejected token came from; never included in command output. */
+  credentialSource?: 'environment' | 'stored' | undefined
 }
 
 export type Outcome<value> = { ok: true; value: value } | { ok: false; error: Failure }
@@ -50,9 +52,14 @@ const tokenRejected = new Set([
 
 /** Maps a failure to the exit code and next step an agent acts on. */
 export function commandError(failure: Failure): CommandError {
-  const { neededScopes, ...error } = failure
+  const { neededScopes, credentialSource, ...error } = failure
   if (error.retryable === true) return { ...error, exitCode: EXIT_RETRYABLE }
   if (error.code === 'UNKNOWN_WORKSPACE') return { ...error, cta: { commands: [listWorkspaces] } }
+  if (
+    credentialSource === 'environment' &&
+    (tokenRejected.has(error.code) || error.code === 'missing_scope')
+  )
+    return { ...error, message: `${error.message}; fix or unset SLACK_TOKEN before retrying` }
   const steps = loginSteps(error.code, neededScopes ?? [])
   if (steps !== undefined) return { ...error, exitCode: EXIT_LOGIN, cta: { commands: steps } }
   if (error.code === 'missing_scope')

@@ -730,9 +730,10 @@ describe('error contract', () => {
     expect(result.json()).toMatchObject({ code: 'RATE_LIMITED', retryable: true })
   })
 
-  test('a rejected token exits 4 and suggests slack login', async () => {
+  test('a rejected stored token exits 4 and suggests slack login', async () => {
+    const file = credentialsFile(rotatingStore({ T1: { accessToken } }))
     const result = await run(
-      cli({ ...withToken(), fetch: () => Response.json({ ok: false, error: 'invalid_auth' }) }),
+      cli({ file, fetch: () => Response.json({ ok: false, error: 'invalid_auth' }) }),
       read,
     )
     expect(result.exitCode).toBe(4)
@@ -742,23 +743,39 @@ describe('error contract', () => {
     })
   })
 
+  test('a rejected SLACK_TOKEN says to fix or unset the override instead of logging in', async () => {
+    const result = await run(
+      cli({ ...withToken(), fetch: () => Response.json({ ok: false, error: 'invalid_auth' }) }),
+      read,
+    )
+    expect(result.exitCode).toBe(1)
+    expect(result.json()).toMatchObject({
+      code: 'invalid_auth',
+      message: expect.stringMatching(/fix or unset SLACK_TOKEN/),
+    })
+    expect(result.json().cta).toBeUndefined()
+    expect(result.output).not.toContain(accessToken)
+  })
+
   test.each([
     ['chat:write', 'slack login --write'],
     ['search:read', 'slack login'],
     ['users.profile:read', 'slack login'],
     ['usergroups:write', 'slack login --write'],
     ['admin,users.profile:read', 'slack login'],
-  ])('a missing %s scope suggests %s', async (needed, command) => {
+  ])('a stored token missing %s suggests %s', async (needed, command) => {
+    const file = credentialsFile(rotatingStore({ T1: { accessToken } }))
     const fetch = () => Response.json({ ok: false, error: 'missing_scope', needed })
-    const result = await run(cli({ ...withToken(), fetch }), read)
+    const result = await run(cli({ file, fetch }), read)
     expect(result.exitCode).toBe(4)
     expect(result.json()).toMatchObject({ code: 'missing_scope', cta: { commands: [{ command }] } })
   })
 
-  test('a missing scope that login does not request says login cannot grant it', async () => {
+  test('a stored token missing a scope that login does not request says login cannot grant it', async () => {
+    const file = credentialsFile(rotatingStore({ T1: { accessToken } }))
     const result = await run(
       cli({
-        ...withToken(),
+        file,
         fetch: () => Response.json({ ok: false, error: 'missing_scope', needed: 'admin' }),
       }),
       read,
@@ -766,6 +783,24 @@ describe('error contract', () => {
     expect(result.exitCode).toBe(1)
     expect(result.json().cta).toBeUndefined()
     expect(result.json().message).toMatch(/slack login cannot grant it; set SLACK_TOKEN/)
+  })
+
+  test('a SLACK_TOKEN missing a scope says to fix or unset the override', async () => {
+    const result = await run(
+      cli({
+        ...withToken(),
+        fetch: () =>
+          Response.json({ ok: false, error: 'missing_scope', needed: 'channels:history' }),
+      }),
+      read,
+    )
+    expect(result.exitCode).toBe(1)
+    expect(result.json()).toMatchObject({
+      code: 'missing_scope',
+      message: expect.stringMatching(/fix or unset SLACK_TOKEN/),
+    })
+    expect(result.json().cta).toBeUndefined()
+    expect(result.output).not.toContain(accessToken)
   })
 })
 

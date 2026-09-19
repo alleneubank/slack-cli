@@ -11,11 +11,10 @@ export const SLACK_RESPONSE_BYTES_MAX: number = 16 * 1024 * 1024
 const slackResponseSchema = z.object({ ok: z.boolean() }).passthrough()
 const workspaceGlobals = z.object({ workspace: z.string().optional() })
 
-/** A resolved access token. `refresh` renews a stored rotating token; absent for `SLACK_TOKEN`. */
-export type Credential = {
-  token: string
-  refresh?: (() => Promise<Outcome<string>>) | undefined
-}
+/** A resolved access token and its recovery path when Slack rejects it. */
+export type Credential =
+  | { token: string; source: 'environment' }
+  | { token: string; source: 'stored'; refresh?: (() => Promise<Outcome<string>>) | undefined }
 
 export type WebApiDeps = {
   fetch: (request: Request) => Response | Promise<Response>
@@ -97,12 +96,23 @@ async function invoke(
   const resolved = await deps.credential(workspace)
   if (!resolved.ok) return resolved
   const body = formBody(method, input)
-  const first = await post(method, body, resolved.value.token, deps)
+  const first = withCredentialSource(
+    await post(method, body, resolved.value.token, deps),
+    resolved.value.source,
+  )
   const expired = !first.ok && first.error.code === 'token_expired'
-  if (!expired || resolved.value.refresh === undefined) return first
+  if (!expired || resolved.value.source === 'environment' || resolved.value.refresh === undefined)
+    return first
   const refreshed = await resolved.value.refresh()
   if (!refreshed.ok) return refreshed
-  return post(method, body, refreshed.value, deps)
+  return withCredentialSource(await post(method, body, refreshed.value, deps), 'stored')
+}
+
+function withCredentialSource(
+  outcome: Outcome<SlackBody>,
+  source: Credential['source'],
+): Outcome<SlackBody> {
+  return outcome.ok ? outcome : { ok: false, error: { ...outcome.error, credentialSource: source } }
 }
 
 /** Only the method's declared Slack arguments are sent. */

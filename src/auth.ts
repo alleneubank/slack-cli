@@ -27,7 +27,7 @@ export function credentialResolver(
 ): (workspace: string | undefined) => Promise<Outcome<Credential>> {
   return async (workspace) => {
     const token = envToken(deps.env)
-    if (token !== undefined) return { ok: true, value: { token } }
+    if (token !== undefined) return { ok: true, value: { token, source: 'environment' } }
 
     const stored = await readStore(deps.store)
     if (!stored.ok) return stored
@@ -38,13 +38,17 @@ export function credentialResolver(
     const team = teams[teamId]
     if (team === undefined) return { ok: false, error: unknownWorkspace(teamId, stored.value) }
 
-    if (team.refreshToken === undefined) return { ok: true, value: { token: team.accessToken } }
+    if (team.refreshToken === undefined)
+      return { ok: true, value: { token: team.accessToken, source: 'stored' } }
     const refresh = () => refreshTeam(deps, teamId, team.accessToken)
     const expiring =
       team.expiresAt !== undefined && team.expiresAt - deps.now() < REFRESH_BEFORE_EXPIRY_MS
-    if (!expiring) return { ok: true, value: { token: team.accessToken, refresh } }
+    if (!expiring)
+      return { ok: true, value: { token: team.accessToken, source: 'stored', refresh } }
     const refreshed = await refresh()
-    return refreshed.ok ? { ok: true, value: { token: refreshed.value } } : refreshed
+    return refreshed.ok
+      ? { ok: true, value: { token: refreshed.value, source: 'stored' } }
+      : refreshed
   }
 }
 
