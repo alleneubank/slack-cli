@@ -79,6 +79,24 @@ describe('HTTPS redirect relay', () => {
     expect(relayAction(`?state=${state}`)).toEqual({ kind: 'failed', error: 'missing_code' })
   })
 
+  test('a code or error that is not code-shaped is never shown, copied, or forwarded', () => {
+    const escape = encodeURIComponent('\u001b]0;pwned\u0007\u001b[2J')
+    for (const state of ['paste.AAAAAAAAAAAAAAAAAAAAAA', 'loopback.AAAAAAAAAAAAAAAAAAAAAA']) {
+      expect(relayAction(`?code=${escape}&state=${state}`)).toEqual({
+        kind: 'failed',
+        error: 'invalid_code',
+      })
+      expect(relayAction(`?code=a%20b&state=${state}`)).toEqual({
+        kind: 'failed',
+        error: 'invalid_code',
+      })
+      expect(relayAction(`?error=${escape}&state=${state}`)).toEqual({
+        kind: 'failed',
+        error: 'invalid_error',
+      })
+    }
+  })
+
   test('a visit without a CLI state is never forwarded', () => {
     for (const search of [
       '',

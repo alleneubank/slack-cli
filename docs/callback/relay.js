@@ -9,6 +9,10 @@ export const LOOPBACK_CALLBACK_URL = 'http://127.0.0.1:8912/callback'
 // `slack login` sends `loopback.<random>` or `paste.<random>` as the OAuth state.
 const loopbackState = /^loopback\.[A-Za-z0-9_-]{16,64}$/
 const pasteState = /^paste\.[A-Za-z0-9_-]{16,64}$/
+// Slack codes and error names use only these characters. Anything else, such
+// as terminal escape sequences in a crafted link, is never shown, copied, or
+// forwarded; the page tells people to paste what it shows into a terminal.
+const oauthValue = /^[A-Za-z0-9._-]{1,512}$/
 
 /**
  * @typedef {{ kind: 'forward', url: string }
@@ -28,16 +32,17 @@ export function relayAction(search) {
   const state = params.get('state') ?? ''
   const code = params.get('code')
   const error = params.get('error')
-  if (loopbackState.test(state)) {
+  const delivery = loopbackState.test(state) ? 'loopback' : pasteState.test(state) ? 'paste' : null
+  if (delivery === null) return { kind: 'install' }
+  if (code !== null && !oauthValue.test(code)) return { kind: 'failed', error: 'invalid_code' }
+  if (error !== null && !oauthValue.test(error)) return { kind: 'failed', error: 'invalid_error' }
+  if (delivery === 'loopback') {
     const forwarded = new URLSearchParams({ state })
     if (code !== null) forwarded.set('code', code)
     if (error !== null) forwarded.set('error', error)
     return { kind: 'forward', url: `${LOOPBACK_CALLBACK_URL}?${forwarded}` }
   }
-  if (pasteState.test(state)) {
-    if (error !== null) return { kind: 'failed', error }
-    if (code === null || code === '') return { kind: 'failed', error: 'missing_code' }
-    return { kind: 'paste', code }
-  }
-  return { kind: 'install' }
+  if (error !== null) return { kind: 'failed', error }
+  if (code === null) return { kind: 'failed', error: 'missing_code' }
+  return { kind: 'paste', code }
 }
