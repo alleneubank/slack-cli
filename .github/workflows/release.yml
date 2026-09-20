@@ -155,19 +155,26 @@ jobs:
           }
 
           reconcile_release() {
-            local current_latest
+            local current_latest=false
             local existing
             local existing_tag
             local is_draft
             local is_prerelease
+            local latest_tag
 
-            if ! existing=$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft,isLatest,isPrerelease,tagName --jq '[.tagName, .isDraft, .isPrerelease, .isLatest] | @tsv'); then
+            if ! existing=$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName --jq '[.tagName, .isDraft, .isPrerelease] | @tsv'); then
               return 1
             fi
-            IFS=$'\t' read -r existing_tag is_draft is_prerelease current_latest <<< "$existing"
+            IFS=$'\t' read -r existing_tag is_draft is_prerelease <<< "$existing"
             if [[ "$existing_tag" != "$TAG_NAME" || "$is_draft" != 'false' || "$is_prerelease" != 'false' ]]; then
               echo "Existing release for $TAG_NAME is not the expected stable published release" >&2
               return 1
+            fi
+            if ! latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name); then
+              return 1
+            fi
+            if [[ "$latest_tag" == "$TAG_NAME" ]]; then
+              current_latest=true
             fi
             if [[ "$current_latest" != "$IS_LATEST" ]]; then
               echo "Correcting latest status for $TAG_NAME: $current_latest -> $IS_LATEST"
