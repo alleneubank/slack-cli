@@ -1,0 +1,215 @@
+name: GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to backfill
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Validate release and prepare notes
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ "$EVENT_NAME" == 'push' ]]; then
+              echo "::notice::Skipping non-stable tag $TAG_NAME"
+              echo 'skip=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Expected a stable semantic-version tag, got: $TAG_NAME" >&2
+            exit 1
+          fi
+
+          retry_capture() {
+            local attempt=1
+            local output
+            output=$(mktemp "$RUNNER_TEMP/retry-output.XXXXXX")
+            until "$@" > "$output"; do
+              if (( attempt >= 4 )); then
+                rm -f "$output"
+                return 1
+              fi
+              echo "::warning::Attempt $attempt failed; retrying" >&2
+              sleep $((5 * attempt))
+              attempt=$((attempt + 1))
+            done
+            cat "$output"
+            rm -f "$output"
+          }
+
+          version="${TAG_NAME#v}"
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          tag_commit=$(git rev-parse "${TAG_NAME}^{commit}")
+          head_commit=$(git rev-parse HEAD)
+
+          if [[ "$package_name" != '@alleneubank/slack-cli' ]]; then
+            echo "Unexpected package name: $package_name" >&2
+            exit 1
+          fi
+          if [[ "$package_version" != "$version" ]]; then
+            echo "Tag $TAG_NAME does not match package version $package_version" >&2
+            exit 1
+          fi
+          if [[ "$tag_commit" != "$head_commit" ]]; then
+            echo "Checked-out commit $head_commit does not match $TAG_NAME at $tag_commit" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "$TAG_NAME ($tag_commit) is not reachable from origin/main" >&2
+            exit 1
+          fi
+
+          registry_version=$(retry_capture npm view "$package_name@$version" version --registry=https://registry.npmjs.org)
+          if [[ "$registry_version" != "$version" ]]; then
+            echo "npm returned version $registry_version for $package_name@$version" >&2
+            exit 1
+          fi
+
+          notes="$RUNNER_TEMP/release-notes.md"
+          heading_count=$(grep -Fxc "## $version" CHANGELOG.md || true)
+          if [[ "$heading_count" != 1 ]]; then
+            echo "Expected one CHANGELOG.md heading for $version, found $heading_count" >&2
+            exit 1
+          fi
+          awk -v heading="## $version" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > "$notes"
+          if [[ ! -s "$notes" ]]; then
+            echo "Release notes for $version are empty" >&2
+            exit 1
+          fi
+
+          latest_version=$(retry_capture npm view "$package_name" dist-tags.latest --registry=https://registry.npmjs.org)
+          if [[ "$latest_version" == "$version" ]]; then
+            echo 'latest=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'latest=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        if: steps.release.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_LATEST: ${{ steps.release.outputs.latest }}
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          probe_release() {
+            local error="$RUNNER_TEMP/release-probe-error.txt"
+            local response="$RUNNER_TEMP/release-probe.txt"
+            local status
+            local view_status
+
+            set +e
+            gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" > "$response" 2> "$error"
+            view_status=$?
+            set -e
+
+            status=$(awk '/^HTTP\// { code = $2 } END { print code }' "$response")
+            if [[ "$status" == '200' && "$view_status" == 0 ]]; then
+              release_exists=true
+              return 0
+            fi
+            if [[ "$status" == '404' ]]; then
+              release_exists=false
+              return 0
+            fi
+
+            cat "$error" >&2
+            echo "GitHub release probe failed with HTTP status ${status:-unknown}" >&2
+            return 1
+          }
+
+          reconcile_release() {
+            local current_latest
+            local existing
+            local existing_tag
+            local is_draft
+            local is_prerelease
+
+            if ! existing=$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft,isLatest,isPrerelease,tagName --jq '[.tagName, .isDraft, .isPrerelease, .isLatest] | @tsv'); then
+              return 1
+            fi
+            IFS=$'\t' read -r existing_tag is_draft is_prerelease current_latest <<< "$existing"
+            if [[ "$existing_tag" != "$TAG_NAME" || "$is_draft" != 'false' || "$is_prerelease" != 'false' ]]; then
+              echo "Existing release for $TAG_NAME is not the expected stable published release" >&2
+              return 1
+            fi
+            if [[ "$current_latest" != "$IS_LATEST" ]]; then
+              echo "Correcting latest status for $TAG_NAME: $current_latest -> $IS_LATEST"
+              if ! gh release edit "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --latest="$IS_LATEST"; then
+                return 1
+              fi
+            fi
+            echo "Published release $TAG_NAME already exists"
+          }
+
+          ensure_release() {
+            if ! probe_release; then
+              return 1
+            fi
+            if [[ "$release_exists" == 'true' ]]; then
+              reconcile_release
+              return
+            fi
+
+            local latest=(--latest=false)
+            if [[ "$IS_LATEST" == 'true' ]]; then
+              latest=(--latest)
+            fi
+
+            gh release create "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$TAG_NAME" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              "${latest[@]}"
+          }
+
+          retry() {
+            local attempt=1
+            until "$@"; do
+              if (( attempt >= 4 )); then
+                return 1
+              fi
+              echo "::warning::Attempt $attempt failed; retrying" >&2
+              sleep $((5 * attempt))
+              attempt=$((attempt + 1))
+            done
+          }
+
+          retry ensure_release
