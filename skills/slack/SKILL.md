@@ -27,25 +27,29 @@ only when the task names a workspace other than the default, or a command exits
   `conversations replies <channel> <ts>`, `chat getPermalink <channel> <ts>`,
   `chat postMessage <channel>`, `chat update|delete <channel> <ts>`,
   `search messages <query>`, `files info <file>`. Everything else is a flag.
-- Pass `--json` and keep output small with `--filter-output`
-  (`messages[].ts,messages[].user,messages[].text`) or `--token-limit 2000`.
+- Pass `--json` and select fields with `--filter-output`; raw messages carry
+  mostly metadata. Do not cut reads with `--token-limit`: it can drop the
+  message you need. For history and replies:
+  `--filter-output 'messages[].ts,messages[].user,messages[].text,messages[].thread_ts,messages[].reply_count,messages[].attachments[].fallback,messages[].files[].name'`.
+  `attachments[].fallback` is a summary; read one message unfiltered when its
+  attachment or `blocks` details matter.
 - One call returns one page: continue with `--cursor <response_metadata.next_cursor>`
   (search: `--page`) until it is empty.
 
 ## Read
 
-- **Message link** `https://x.slack.com/archives/C0123/p1789757627925439`: channel
-  `C0123`, ts `1789757627.925439` (dot before the last six digits); a
-  `thread_ts` query names the parent. Read it with
-  `slack conversations history C0123 --oldest <ts> --latest <ts> --inclusive true --limit 1`,
-  its thread with `slack conversations replies C0123 <thread_ts or ts>`.
+- **Message link**: pass the link itself where a command takes `<channel> <ts>`.
+  `slack conversations history <link>` reads that message and
+  `slack conversations replies <link>` its thread (following `thread_ts`);
+  `chat getPermalink|update|delete` take it too. For a reply in a thread, use
+  `replies`: history does not return replies.
 - **Time range**: `--oldest`/`--latest` take Unix seconds or ISO 8601 in UTC
   (`2026-09-24`, `2026-09-24T21:00`, `2026-09-24T14:00-07:00`); no `date` needed.
   History is newest first.
 - **Search**: `slack search messages '<query>'` with `in:#channel`, `from:@name`,
-  `on:2026-09-24`, `before:`/`after:`, `"exact phrase"`, `is:thread`. Matches
-  are in `messages.matches[]` with `channel`, `ts`, `permalink`. Try search
-  first when the task gives a channel, person, day, or phrase.
+  `on:2026-09-24`, `before:`/`after:`, `"exact phrase"`, `is:thread`. Try
+  search first when the task gives a channel, person, day, or phrase. Filter:
+  `--filter-output 'messages.total,messages.matches[].channel.name,messages.matches[].ts,messages.matches[].username,messages.matches[].text,messages.matches[].attachments[].fallback,messages.matches[].permalink'`.
 - **Channel by name**: no method takes a name; search, or match `name` in
   `slack conversations list --types public_channel,private_channel --exclude_archived true --limit 1000 --filter-output 'channels[].id,channels[].name'`.
 - **Person**: `slack users info --user U…` for an id; `users lookupByEmail --email`
