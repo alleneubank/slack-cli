@@ -17,6 +17,23 @@ export const POSITIONAL_ARGUMENTS: Readonly<Record<string, readonly string[]>> =
   'search.messages': ['query'],
 }
 
+/**
+ * What a message link given for the `channel` positional supplies:
+ * `message` fills the second positional with the linked message's ts;
+ * `thread` fills it with the thread parent the link names, else the message ts;
+ * `history` reads only the linked message unless a range flag is given.
+ */
+export type MessageLinkUse = 'message' | 'thread' | 'history'
+
+/** Methods whose `channel` positional also takes a Slack message link. */
+export const MESSAGE_LINK_METHODS: Readonly<Record<string, MessageLinkUse>> = {
+  'chat.delete': 'message',
+  'chat.getPermalink': 'message',
+  'chat.update': 'message',
+  'conversations.history': 'history',
+  'conversations.replies': 'thread',
+}
+
 /** Time-range arguments Slack takes as Unix seconds; the CLI also accepts ISO 8601 for them. */
 export const TIMESTAMP_ARGUMENTS: ReadonlySet<string> = new Set([
   'latest',

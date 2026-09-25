@@ -205,6 +205,97 @@ describe('Slack Web API methods', () => {
     expect(bodies).toHaveLength(2)
   })
 
+  describe('message links', () => {
+    const messageLink = 'https://example.slack.com/archives/C0123456789/p1789757627925439'
+    const replyLink = `${messageLink}?thread_ts=1789757600.000100&cid=C0123456789`
+
+    function recorder() {
+      const requests: { method: string; body: URLSearchParams }[] = []
+      const target = cli({
+        ...withToken(),
+        fetch: async (request) => {
+          const method = new URL(request.url).pathname.replace('/api/', '')
+          requests.push({ method, body: new URLSearchParams(await request.text()) })
+          return Response.json({ ok: true })
+        },
+      })
+      const sent = () =>
+        requests.map(({ method, body }) => [method, Object.fromEntries(body.entries())])
+      return { target, sent }
+    }
+
+    test('a link names the channel and message in place of the two ids', async () => {
+      const { target, sent } = recorder()
+      expect((await run(target, ['chat', 'getPermalink', messageLink])).exitCode).toBeUndefined()
+      expect((await run(target, ['chat', 'delete', replyLink])).exitCode).toBeUndefined()
+      expect(
+        (await run(target, ['chat', 'getPermalink', 'C1', '1789757627.925439'])).exitCode,
+      ).toBeUndefined()
+      expect(sent()).toEqual([
+        ['chat.getPermalink', { channel: 'C0123456789', message_ts: '1789757627.925439' }],
+        ['chat.delete', { channel: 'C0123456789', ts: '1789757627.925439' }],
+        ['chat.getPermalink', { channel: 'C1', message_ts: '1789757627.925439' }],
+      ])
+    })
+
+    test('replies read the thread a reply link names', async () => {
+      const { target, sent } = recorder()
+      expect((await run(target, ['conversations', 'replies', replyLink])).exitCode).toBeUndefined()
+      expect(
+        (await run(target, ['conversations', 'replies', messageLink])).exitCode,
+      ).toBeUndefined()
+      expect(sent()).toEqual([
+        ['conversations.replies', { channel: 'C0123456789', ts: '1789757600.000100' }],
+        ['conversations.replies', { channel: 'C0123456789', ts: '1789757627.925439' }],
+      ])
+    })
+
+    test('history with a link reads that message unless a range flag is given', async () => {
+      const { target, sent } = recorder()
+      expect(
+        (await run(target, ['conversations', 'history', messageLink])).exitCode,
+      ).toBeUndefined()
+      expect(
+        (await run(target, ['conversations', 'history', messageLink, '--limit', '5'])).exitCode,
+      ).toBeUndefined()
+      expect(sent()).toEqual([
+        [
+          'conversations.history',
+          {
+            channel: 'C0123456789',
+            oldest: '1789757627.925439',
+            latest: '1789757627.925439',
+            inclusive: 'true',
+            limit: '1',
+          },
+        ],
+        ['conversations.history', { channel: 'C0123456789', limit: '5' }],
+      ])
+    })
+
+    test('a malformed link or a missing ts fails before any request', async () => {
+      const { target, sent } = recorder()
+      const invalid = [
+        ['chat', 'delete', 'https://example.com/archives/C0123456789/p1789757627925439'],
+        ['chat', 'delete', 'https://example.slack.com/archives/C0123456789/1789757627925439'],
+        ['conversations', 'replies', 'https://example.slack.com/archives/C0123456789/p17897'],
+        ['conversations', 'replies', `${messageLink}?thread_ts=yesterday`],
+        ['conversations', 'history', 'example.slack.com/archives/C0123456789'],
+        ['chat', 'delete', 'C0123456789'],
+        ['chat', 'delete', messageLink, '1789757627.925439'],
+      ]
+      for (const argv of invalid) {
+        const result = await run(target, argv)
+        expect(result.exitCode).toBe(1)
+        expect(result.output).toContain('INVALID_ARGUMENT')
+      }
+      expect((await run(target, ['chat', 'delete', 'https://x.slack.com/'])).output).toContain(
+        'https://<workspace>.slack.com/archives/<channel>/p<digits>',
+      )
+      expect(sent()).toEqual([])
+    })
+  })
+
   test('multi-line option values reach Slack intact', async () => {
     const bodies: URLSearchParams[] = []
     const text = 'line one\nline two\ttabbed'

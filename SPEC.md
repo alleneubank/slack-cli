@@ -81,7 +81,17 @@ output.
   time-range arguments `oldest`, `latest`, `ts_from`, and `ts_to`: they take
   Unix seconds or an ISO 8601 date or date-time (UTC without an offset) and
   send Unix seconds, so agents need no shell date arithmetic. Overlay
-  positionals replace their flags. A local argument parse failure has code
+  positionals replace their flags. Where the positionals are `<channel> <ts>`
+  (`chat delete`, `chat getPermalink`, `chat update`, `conversations
+replies`), a single Slack message link
+  (`https://<workspace>.slack.com/archives/<channel>/p<ts digits>`) may stand
+  for both; `conversations replies` takes the link's `thread_ts` query
+  parameter as the thread when present. `conversations history` also takes a
+  link for `<channel>` and then reads only that message (`oldest` = `latest` =
+  its ts, `inclusive`, `limit` 1) unless any of those four flags is given,
+  which then win. A link-shaped value (one containing `/`) that does not
+  parse, a missing ts, or a ts given alongside a link fails with
+  `INVALID_ARGUMENT` before any request; plain ids are sent unchanged. A local argument parse failure has code
   `INVALID_ARGUMENT`, not `UNKNOWN`. Output is Slack's JSON object, unchanged.
 - **REQ-API-003** The request body is form-encoded and contains only the
   catalog's declared arguments for that method. `ok: false` is a command

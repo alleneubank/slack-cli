@@ -1,12 +1,15 @@
 import { z } from '@alleneubank/incur'
 
 import catalogJson from './catalog.json' with { type: 'json' }
+import { HISTORY_WINDOW_OPTIONS, MESSAGE_LINK_SHAPE } from './message-links.js'
 import {
   isDestructive,
+  MESSAGE_LINK_METHODS,
   METHOD_NOTES,
   MUTATING_METHODS,
   POSITIONAL_ARGUMENTS,
   TIMESTAMP_ARGUMENTS,
+  type MessageLinkUse,
 } from './overlay.js'
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
@@ -32,6 +35,11 @@ const reservedFlags: ReadonlySet<string> = new Set([
 
 type Shape = Record<string, z.ZodType>
 
+/** How a message link given for the `channel` positional fills the request. */
+export type MessageLinkTarget =
+  | { use: Exclude<MessageLinkUse, 'history'>; /** The ts positional the link fills. */ ts: string }
+  | { use: 'history' }
+
 /** A catalog method resolved into a command definition. */
 export type SlackMethod = {
   /** Slack method name, e.g. `users.profile.get`. */
@@ -49,6 +57,8 @@ export type SlackMethod = {
   parameters: ReadonlyMap<string, string>
   /** Option keys whose values are converted to Unix seconds before sending. */
   timestamps: ReadonlySet<string>
+  /** Set when the `channel` positional also takes a message link. */
+  messageLink: MessageLinkTarget | undefined
 }
 
 export const SLACK_METHOD_FAMILIES: string[] = [
@@ -85,11 +95,12 @@ function resolveMethod(method: CatalogMethod): SlackMethod {
   const options: Shape = {}
   const parameters = new Map<string, string>()
   const timestamps = new Set<string>()
+  const messageLink = messageLinkTarget(method, positionals)
   for (const name of positionals) {
     const argument = method.args.find((candidate) => candidate.name === name)
     if (argument === undefined || !argument.required)
       throw new Error(`Overlay positional ${method.name} ${name} is not a required argument`)
-    args[name] = z.string().describe(describeArgument(argument))
+    args[name] = positionalSchema(argument, messageLink)
     parameters.set(name, name)
   }
   for (const argument of method.args) {
@@ -114,7 +125,51 @@ function resolveMethod(method: CatalogMethod): SlackMethod {
     options: z.object(options),
     parameters,
     timestamps,
+    messageLink,
   }
+}
+
+function messageLinkTarget(
+  method: CatalogMethod,
+  positionals: readonly string[],
+): MessageLinkTarget | undefined {
+  const use = MESSAGE_LINK_METHODS[method.name]
+  if (use === undefined) return undefined
+  if (positionals[0] !== 'channel')
+    throw new Error(`Message link method ${method.name} does not take a channel positional`)
+  if (use === 'history') {
+    const names = new Set(method.args.map((argument) => argument.name))
+    const missing = HISTORY_WINDOW_OPTIONS.filter((name) => !names.has(name))
+    if (positionals.length !== 1 || missing.length > 0)
+      throw new Error(`Message link method ${method.name} cannot read a single message`)
+    return { use }
+  }
+  const ts = positionals[1]
+  if (ts === undefined || positionals.length !== 2)
+    throw new Error(`Message link method ${method.name} does not take <channel> <ts> positionals`)
+  return { use, ts }
+}
+
+/** A link-capable method's ts positional is optional, since the link can supply it. */
+function positionalSchema(
+  argument: CatalogArgument,
+  messageLink: MessageLinkTarget | undefined,
+): z.ZodType {
+  const description = describeArgument(argument)
+  if (messageLink === undefined) return z.string().describe(description)
+  if (argument.name === 'channel')
+    return z
+      .string()
+      .describe(
+        `Channel id, or a message link: ${MESSAGE_LINK_SHAPE}. ${messageLinkEffect[messageLink.use]} ${description}`,
+      )
+  return z.string().optional().describe(`${description} Omit when the channel is a message link.`)
+}
+
+const messageLinkEffect: Readonly<Record<MessageLinkUse, string>> = {
+  message: 'A link names the message.',
+  thread: 'A link names the thread: its thread_ts when present, else the message.',
+  history: `A link reads only that message unless any of --${HISTORY_WINDOW_OPTIONS.join(', --')} is given; for a thread reply, use conversations replies.`,
 }
 
 function describeArgument(argument: CatalogArgument): string {

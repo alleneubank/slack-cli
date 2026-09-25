@@ -1,6 +1,7 @@
 import { Cli, z, type Plugin } from '@alleneubank/incur'
 
 import { commandError, type Outcome } from './errors.js'
+import { withMessageLink } from './message-links.js'
 import { familySummary, slackMethods, type SlackMethod } from './methods.js'
 import { unixTimestamp } from './timestamps.js'
 
@@ -94,7 +95,9 @@ async function invoke(
   workspace: string | undefined,
   deps: WebApiDeps,
 ): Promise<Outcome<SlackBody>> {
-  const encoded = formBody(method, input)
+  const linked = withMessageLink(method, input)
+  if (!linked.ok) return linked
+  const encoded = formBody(method, linked.value)
   if (!encoded.ok) return encoded
   const body = encoded.value
   const resolved = await deps.credential(workspace)
