@@ -1,5 +1,18 @@
 # @alleneubank/slack-cli
 
+## 0.4.0
+
+### Minor Changes
+
+- 1726644: `--json` output is compact single-line JSON when stdout is not a terminal (agents, pipes) and stays indented in a terminal, via `@alleneubank/incur` 0.9.0.
+- c2d5827: Time-range flags (`--oldest`, `--latest`, `--ts_from`, `--ts_to`) accept ISO 8601 dates and times as well as Unix seconds. The skill now covers message links, date ranges, search, and lookups by name inline, lists the positional ids, and runs `slack workspaces list` only when the workspace is in doubt.
+- 60140ba: Commands that take `<channel> <ts>` (`chat delete`, `chat getPermalink`, `chat update`, `conversations replies`) accept a single Slack message link instead; `conversations replies` follows the link's `thread_ts` to the thread. `conversations history` takes a link for `<channel>` and reads only that message unless `--oldest`, `--latest`, `--inclusive`, or `--limit` is given. A malformed link fails with `INVALID_ARGUMENT` before any request.
+- d0aff4c: `slack workspaces list` leaves out granted scopes unless `--scopes` is passed; they were most of its output.
+
+### Patch Changes
+
+- e758ac3: Keep login waiting after an unrelated OAuth callback, and direct rejected `SLACK_TOKEN` users to fix or unset the override.
+
 ## 0.3.0
 
 ### Minor Changes
