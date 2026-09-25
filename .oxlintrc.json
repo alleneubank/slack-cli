@@ -25,7 +25,7 @@
   },
   "overrides": [
     {
-      "files": ["src/cli.ts", "src/**/*.test.ts"],
+      "files": ["src/cli.ts", "src/**/*.test.ts", "evals/**/*.ts"],
       "rules": {
         "no-console": "off"
       }
