@@ -624,7 +624,7 @@ describe('workspaces', () => {
         'T1',
       ),
     )
-    const listed = await run(cli({ file }), ['workspaces', 'list', '--json'])
+    const listed = await run(cli({ file }), ['workspaces', 'list', '--scopes', '--json'])
     expect(listed.exitCode).toBeUndefined()
     expect(listed.json()).toEqual({
       current: 'T1',
@@ -650,6 +650,7 @@ describe('workspaces', () => {
     )
     expect(overridden.json()).toMatchObject({ current: 'T2', envToken: true })
     expect(overridden.output).not.toMatch(/not-a-secret/)
+    expect(overridden.output).not.toContain('chat:write')
   })
 
   test('workspaces use makes a stored workspace current', async () => {

@@ -37,7 +37,13 @@ export function workspacesCli(deps: WorkspacesDeps): Cli.Cli {
     description: 'List stored workspaces and choose the current one',
   })
     .command('list', {
-      description: 'List stored workspaces, the current one, token expiry, and granted scopes',
+      description: 'List stored workspaces, the current one, and token expiry',
+      options: z.object({
+        scopes: z
+          .boolean()
+          .default(false)
+          .describe('Also list the user scopes each token carries (about 60 per workspace)'),
+      }),
       output: z.object({
         current: z
           .string()
@@ -55,7 +61,9 @@ export function workspacesCli(deps: WorkspacesDeps): Cli.Cli {
         const current = selectedWorkspace(workspace, env, stored.value)
         const workspaces = Object.entries(stored.value.teams)
           .toSorted(([a], [b]) => (a < b ? -1 : 1))
-          .map(([teamId, team]) => describe(teamId, team, teamId === current))
+          .map(([teamId, team]) =>
+            describe(teamId, team, teamId === current, context.options.scopes),
+          )
         return {
           ...(current === undefined ? undefined : { current }),
           envToken: envToken(env) !== undefined,
@@ -85,7 +93,7 @@ export function workspacesCli(deps: WorkspacesDeps): Cli.Cli {
     })
 }
 
-function describe(teamId: string, team: TeamCredentials, current: boolean) {
+function describe(teamId: string, team: TeamCredentials, current: boolean, includeScopes: boolean) {
   return {
     teamId,
     ...(team.teamName === undefined ? undefined : { teamName: team.teamName }),
@@ -95,6 +103,6 @@ function describe(teamId: string, team: TeamCredentials, current: boolean) {
     ...(team.expiresAt === undefined
       ? undefined
       : { expiresAt: new Date(team.expiresAt).toISOString() }),
-    ...(team.scopes === undefined ? undefined : { scopes: team.scopes }),
+    ...(includeScopes && team.scopes !== undefined ? { scopes: team.scopes } : undefined),
   }
 }

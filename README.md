@@ -47,8 +47,8 @@ from Slack straight to your machine; the app's developers never receive it.
 
 Each login adds the authorized workspace to
 `~/.config/slack-cli/credentials.json` (mode 0600) and makes it current.
-`slack workspaces list` shows the stored workspaces, the current one, token
-expiry, and granted scopes, never the tokens. `slack workspaces use
+`slack workspaces list` shows the stored workspaces, the current one, and token
+expiry, never the tokens; `--scopes` adds the granted scopes. `slack workspaces use
 T0123456789` changes the current workspace; `--workspace T0123456789` or
 `SLACK_WORKSPACE` picks one for a single command. `slack logout` removes the
 selected workspace; `slack logout --all` removes every one.
@@ -68,7 +68,7 @@ left out, so the commands that need them fail with `missing_scope` unless
 
 Slack keeps the scopes a user granted this app at earlier logins: after one
 `slack login --write`, a later plain `slack login` still returns a token with
-write scopes. `slack workspaces list` shows what the token carries.
+write scopes. `slack workspaces list --scopes` shows what the token carries.
 
 Tokens do not expire. Slack gives each user one token per app and workspace,
 so every machine signed in as you shares it: `slack auth revoke` invalidates

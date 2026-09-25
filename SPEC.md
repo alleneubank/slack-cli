@@ -161,8 +161,10 @@ output.
 - **REQ-AUTH-006** Login and refresh record the user scopes Slack reports
   (which accumulate across logins) and the team name. `slack workspaces list`
   shows each stored workspace (team id and name, user id, whether it is
-  current, whether it rotates, access token expiry, scopes) and whether
-  `SLACK_TOKEN` overrides them, without printing tokens. `slack workspaces use
+  current, whether it rotates, access token expiry, and with `--scopes` the
+  scopes) and whether `SLACK_TOKEN` overrides them, without printing tokens.
+  Scopes are opt-in because they are most of the output (about 60 per
+  workspace) and a `missing_scope` error already names the scope it needs. `slack workspaces use
 <team>` makes a stored workspace current.
 - **REQ-TEST-001** Unit tests assert observable CLI output against injected
   OAuth and Web API `fetch` for cases the live workspace cannot produce on
