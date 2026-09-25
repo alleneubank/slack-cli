@@ -180,6 +180,31 @@ describe('Slack Web API methods', () => {
     expect(bodies).toEqual(['list_id=L1&format=json'])
   })
 
+  test('time-range flags take ISO 8601 dates and times as well as Unix seconds', async () => {
+    const bodies: URLSearchParams[] = []
+    const target = cli({
+      ...withToken(),
+      fetch: async (request) => {
+        bodies.push(new URLSearchParams(await request.text()))
+        return Response.json({ ok: true, messages: [] })
+      },
+    })
+    const history = (oldest: string, latest: string) =>
+      run(target, ['conversations', 'history', 'C1', '--oldest', oldest, '--latest', latest])
+
+    expect((await history('2026-09-24', '2026-09-24T21:10')).exitCode).toBeUndefined()
+    expect((await history('2026-09-24T14:00-07:00', '1790284800.5')).exitCode).toBeUndefined()
+    expect(bodies.map((body) => [body.get('oldest'), body.get('latest')])).toEqual([
+      ['1790208000', '1790284200'],
+      ['1790283600', '1790284800.5'],
+    ])
+
+    const invalid = await history('2026-02-30', '2026-09-24')
+    expect(invalid.exitCode).toBe(1)
+    expect(invalid.output).toContain('INVALID_ARGUMENT')
+    expect(bodies).toHaveLength(2)
+  })
+
   test('multi-line option values reach Slack intact', async () => {
     const bodies: URLSearchParams[] = []
     const text = 'line one\nline two\ttabbed'

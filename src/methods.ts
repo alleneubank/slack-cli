@@ -1,7 +1,13 @@
 import { z } from '@alleneubank/incur'
 
 import catalogJson from './catalog.json' with { type: 'json' }
-import { isDestructive, METHOD_NOTES, MUTATING_METHODS, POSITIONAL_ARGUMENTS } from './overlay.js'
+import {
+  isDestructive,
+  METHOD_NOTES,
+  MUTATING_METHODS,
+  POSITIONAL_ARGUMENTS,
+  TIMESTAMP_ARGUMENTS,
+} from './overlay.js'
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
 const catalog = catalogJson as Catalog
@@ -41,6 +47,8 @@ export type SlackMethod = {
   options: z.ZodObject<Shape>
   /** Slack argument name for each positional and option key. */
   parameters: ReadonlyMap<string, string>
+  /** Option keys whose values are converted to Unix seconds before sending. */
+  timestamps: ReadonlySet<string>
 }
 
 export const SLACK_METHOD_FAMILIES: string[] = [
@@ -76,6 +84,7 @@ function resolveMethod(method: CatalogMethod): SlackMethod {
   const args: Shape = {}
   const options: Shape = {}
   const parameters = new Map<string, string>()
+  const timestamps = new Set<string>()
   for (const name of positionals) {
     const argument = method.args.find((candidate) => candidate.name === name)
     if (argument === undefined || !argument.required)
@@ -88,6 +97,11 @@ function resolveMethod(method: CatalogMethod): SlackMethod {
     const key = reservedFlags.has(argument.name) ? `slack_${argument.name}` : argument.name
     options[key] = optionSchema(argument)
     parameters.set(key, argument.name)
+    if (TIMESTAMP_ARGUMENTS.has(argument.name)) {
+      if (argument.type !== 'string')
+        throw new Error(`Timestamp argument ${method.name} ${argument.name} is not a string`)
+      timestamps.add(key)
+    }
   }
   return {
     name: method.name,
@@ -99,6 +113,7 @@ function resolveMethod(method: CatalogMethod): SlackMethod {
     args: z.object(args),
     options: z.object(options),
     parameters,
+    timestamps,
   }
 }
 
@@ -106,6 +121,10 @@ function describeArgument(argument: CatalogArgument): string {
   const parts = [argument.description]
   if (argument.default !== undefined) parts.push(`Default: ${argument.default}.`)
   if (argument.example !== undefined) parts.push(`Example: ${argument.example}.`)
+  if (TIMESTAMP_ARGUMENTS.has(argument.name))
+    parts.push(
+      'Also accepts an ISO 8601 date or time, read as UTC without an offset: 2026-09-24, 2026-09-24T21:00, 2026-09-24T21:00-07:00.',
+    )
   return parts.join(' ')
 }
 

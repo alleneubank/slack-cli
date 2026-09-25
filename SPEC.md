@@ -77,7 +77,10 @@ output.
   CLI-owned flag (`format`, `schema`, `workspace`, …) is `--slack_<name>`.
   Required arguments are
   required; `boolean`, `integer`, and `number` arguments are validated
-  locally; every other type is a string passed through unchanged. Overlay
+  locally; every other type is a string passed through unchanged, except the
+  time-range arguments `oldest`, `latest`, `ts_from`, and `ts_to`: they take
+  Unix seconds or an ISO 8601 date or date-time (UTC without an offset) and
+  send Unix seconds, so agents need no shell date arithmetic. Overlay
   positionals replace their flags. A local argument parse failure has code
   `INVALID_ARGUMENT`, not `UNKNOWN`. Output is Slack's JSON object, unchanged.
 - **REQ-API-003** The request body is form-encoded and contains only the
@@ -231,9 +234,10 @@ output.
   generated ones: generated at depth 0 it is one 324 KB file, at depth 1 it is
   37 skills with a 124 KB `admin` skill. The skill teaches discovery
   (`--help`, per-family `--llms-full`) instead of listing methods, and keeps
-  `SKILL.md` short: flows that need more than one method or a step outside
-  the Web API (file upload, message links, lookups by name) live in
-  `skills/slack/references/`, which agents read on demand.
+  `SKILL.md` short. The reads most tasks start with (message links, date
+  ranges, search, lookups by name) are in `SKILL.md`, because a reference
+  read costs an agent a turn on nearly every task; write flows and file
+  handling live in `skills/slack/references/`, which agents read on demand.
 - incur's prompt-injection scan stays on and may add `_warnings` to Slack's
   JSON: agents reading other people's messages need the signal more than
   byte-for-byte output.

@@ -148,11 +148,11 @@ slack skills add
 ```
 
 Installs one skill ([`skills/slack/`](skills/slack/SKILL.md)) that tells
-coding agents how to use the CLI: check `slack workspaces list`, find commands
-with `slack <family> --llms-full` or `--help`, page with `--cursor`, preview
-writes with `--dry-run`, and act on exit codes. Reference files it links cover
-flows that take more than one command, such as uploading a file, working
-from a message link, and finding a channel or person by name. Commands that delete,
+coding agents how to use the CLI: find commands with `slack <family>
+--llms-full` or `--help`, work from message links, search, read date ranges,
+find a channel or person by name, page with `--cursor`, preview writes with
+`--dry-run`, and act on exit codes. Reference files it links cover writing
+messages and uploading or reading files. Commands that delete,
 archive, or revoke are marked `destructive` in `--llms-full` so agents confirm
 first. Output gains a `_warnings` array when Slack text looks like a prompt
 injection; message text is written by other people and is data, not

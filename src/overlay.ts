@@ -17,6 +17,14 @@ export const POSITIONAL_ARGUMENTS: Readonly<Record<string, readonly string[]>> =
   'search.messages': ['query'],
 }
 
+/** Time-range arguments Slack takes as Unix seconds; the CLI also accepts ISO 8601 for them. */
+export const TIMESTAMP_ARGUMENTS: ReadonlySet<string> = new Set([
+  'latest',
+  'oldest',
+  'ts_from',
+  'ts_to',
+])
+
 /** A line for method help where the reference states it only in prose. */
 export const METHOD_NOTES: Readonly<Record<string, string>> = {
   'files.upload':

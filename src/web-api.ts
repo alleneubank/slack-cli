@@ -2,6 +2,7 @@ import { Cli, z, type Plugin } from '@alleneubank/incur'
 
 import { commandError, type Outcome } from './errors.js'
 import { familySummary, slackMethods, type SlackMethod } from './methods.js'
+import { unixTimestamp } from './timestamps.js'
 
 export const SLACK_API_ORIGIN: string = 'https://slack.com'
 export const SLACK_API_TIMEOUT_MS: number = 30_000
@@ -93,9 +94,11 @@ async function invoke(
   workspace: string | undefined,
   deps: WebApiDeps,
 ): Promise<Outcome<SlackBody>> {
+  const encoded = formBody(method, input)
+  if (!encoded.ok) return encoded
+  const body = encoded.value
   const resolved = await deps.credential(workspace)
   if (!resolved.ok) return resolved
-  const body = formBody(method, input)
   const first = withCredentialSource(
     await post(method, body, resolved.value.token, deps),
     resolved.value.source,
@@ -116,13 +119,24 @@ function withCredentialSource(
 }
 
 /** Only the method's declared Slack arguments are sent. */
-function formBody(method: SlackMethod, input: Record<string, unknown>): URLSearchParams {
+function formBody(method: SlackMethod, input: Record<string, unknown>): Outcome<URLSearchParams> {
   const body = new URLSearchParams()
   for (const [key, parameter] of method.parameters) {
     const value = input[key]
-    if (value !== undefined) body.append(parameter, String(value))
+    if (value === undefined) continue
+    if (!method.timestamps.has(key)) {
+      body.append(parameter, String(value))
+      continue
+    }
+    const seconds = unixTimestamp(String(value))
+    if (seconds === undefined)
+      return failure(
+        'INVALID_ARGUMENT',
+        `--${key} must be Unix seconds (1790284180.335339) or an ISO 8601 date or time (2026-09-24, 2026-09-24T21:00Z); got ${JSON.stringify(value)}`,
+      )
+    body.append(parameter, seconds)
   }
-  return body
+  return { ok: true, value: body }
 }
 
 /** Slack rejected the call before acting on it. */

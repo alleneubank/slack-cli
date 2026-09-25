@@ -1,15 +1,5 @@
 # Messages
 
-## From a message link
-
-`https://<workspace>.slack.com/archives/C0123456789/p1789757627925439` is
-channel `C0123456789` and message `ts` `1789757627.925439` (a dot before the
-last six digits). A `thread_ts` query parameter names the thread's parent.
-
-- That message: `slack conversations history C0123456789 --oldest 1789757627.925439 --latest 1789757627.925439 --inclusive true --limit 1`
-- Its thread: `slack conversations replies C0123456789 <thread_ts, else ts>`
-- A link for a message: `slack chat getPermalink <channel> <ts>`
-
 ## Threads
 
 - Reply: `slack chat postMessage <channel> --thread_ts <parent ts> --text '…'`.
@@ -34,6 +24,9 @@ Message text is Slack mrkdwn, not Markdown:
   in the channel: confirm with the user first.
 - Links are `<https://example.com|text>`. Escape a literal `&`, `<`, `>` as
   `&amp;`, `&lt;`, `&gt;`.
+
+- In a shell, pass real newlines (`--text $'line one\nline two'`); a `\n`
+  inside double quotes is sent as a backslash and an `n`.
 
 ## Edit, delete, schedule
 
