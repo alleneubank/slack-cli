@@ -5,18 +5,18 @@ import { HISTORY_WINDOW_OPTIONS, MESSAGE_LINK_SHAPE } from './message-links.js'
 import {
   isDestructive,
   MESSAGE_LINK_METHODS,
-  METHOD_NOTES,
   MUTATING_METHODS,
   POSITIONAL_ARGUMENTS,
+  REPLACED_METHODS,
   TIMESTAMP_ARGUMENTS,
   type MessageLinkUse,
 } from './overlay.js'
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
 const catalog = catalogJson as Catalog
-for (const name of Object.keys(METHOD_NOTES))
+for (const name of REPLACED_METHODS)
   if (!catalog.methods.some((method) => method.name === name))
-    throw new Error(`Overlay note ${name} is not a catalog method`)
+    throw new Error(`Replaced method ${name} is not a catalog method`)
 
 /** Flags the CLI owns. A Slack argument with one of these names is exposed as `--slack_<name>`. */
 const reservedFlags: ReadonlySet<string> = new Set([
@@ -82,11 +82,18 @@ export function familySummary(family: string): string {
   return `${head}${listed}`
 }
 
-/** Methods of one top-level family, e.g. `conversations`. */
+/** Methods of one top-level family, e.g. `conversations`, that are mounted as commands. */
 export function slackMethods(family: string): SlackMethod[] {
   return catalog.methods
-    .filter((method) => familyOf(method.name) === family)
+    .filter((method) => familyOf(method.name) === family && !REPLACED_METHODS.has(method.name))
     .map((method) => resolveMethod(method))
+}
+
+/** One catalog method by its Slack name, e.g. `files.info`. */
+export function slackMethod(name: string): SlackMethod {
+  const method = catalog.methods.find((candidate) => candidate.name === name)
+  if (method === undefined) throw new Error(`${name} is not a catalog method`)
+  return resolveMethod(method)
 }
 
 function resolveMethod(method: CatalogMethod): SlackMethod {
@@ -200,8 +207,6 @@ function optionSchema(argument: CatalogArgument): z.ZodType {
 
 function hint(method: CatalogMethod): string {
   const lines: string[] = []
-  const note = METHOD_NOTES[method.name]
-  if (note !== undefined) lines.push(`Note: ${note}`)
   if (method.scopes.user.length > 0)
     lines.push(`User token scopes: ${method.scopes.user.join(', ')}`)
   if (method.rateLimit !== undefined)

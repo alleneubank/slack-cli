@@ -3,7 +3,8 @@
 An unofficial command-line client for the
 [Slack Web API](https://docs.slack.dev/reference/methods), for people and
 coding agents. Every Web API method a user token can call is a typed command:
-`conversations.history` is `slack conversations history`.
+`conversations.history` is `slack conversations history`. `slack files download`
+and `slack files upload` move file contents, which no Web API method does.
 
 > **Not affiliated with Slack.** This project is not made, endorsed, or
 > sponsored by Slack Technologies, LLC. "Slack" is a trademark of Slack

@@ -2,7 +2,7 @@ import type { Outcome } from './errors.js'
 import type { SlackMethod } from './methods.js'
 
 /** A Slack message link, e.g. `https://acme.slack.com/archives/C0123456789/p1789757627925439`. */
-type MessageLink = {
+export type MessageLink = {
   channel: string
   ts: string
   /** The thread parent, from the link's `thread_ts` query parameter. */
@@ -24,7 +24,7 @@ const slackTs = /^\d{10}\.\d{6}$/
  * Reads a message link. Returns undefined for a value that is not link-shaped
  * (channel ids never contain `/`), and a failure for a link that does not parse.
  */
-function parseMessageLink(value: string): Outcome<MessageLink> | undefined {
+export function parseMessageLink(value: string): Outcome<MessageLink> | undefined {
   if (!value.includes('/')) return undefined
   const url = URL.parse(value)
   const onSlack = url !== null && url.protocol === 'https:' && slackHost.test(url.hostname)
