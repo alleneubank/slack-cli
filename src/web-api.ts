@@ -2,7 +2,7 @@ import { Cli, z, type Plugin } from '@alleneubank/incur'
 
 import { commandError, type Outcome } from './errors.js'
 import { withMessageLink } from './message-links.js'
-import { familySummary, slackMethods, type SlackMethod } from './methods.js'
+import { familySummary, slackMethod, slackMethods, type SlackMethod } from './methods.js'
 import { unixTimestamp } from './timestamps.js'
 
 export const SLACK_API_ORIGIN: string = 'https://slack.com'
@@ -27,12 +27,19 @@ export type WebApiDeps = {
 }
 
 /** A successful Slack Web API response body. */
-type SlackBody = { ok: true; [key: string]: unknown }
+export type SlackBody = { ok: true; [key: string]: unknown }
 
 type Group = { methods: SlackMethod[]; groups: Map<string, Group> }
 
-/** Mounts one Slack method family, e.g. `conversations`, as `slack conversations <method>`. */
-export function slackWebApiFamily(family: string, deps: WebApiDeps): Plugin {
+/**
+ * Mounts one Slack method family, e.g. `conversations`, as `slack conversations <method>`.
+ * `extend` adds hand-written commands beside the family's methods.
+ */
+export function slackWebApiFamily(
+  family: string,
+  deps: WebApiDeps,
+  extend?: (cli: Cli.Cli) => void,
+): Plugin {
   const description = familySummary(family)
   return {
     name: `slack-web-api-${family}`,
@@ -44,7 +51,9 @@ export function slackWebApiFamily(family: string, deps: WebApiDeps): Plugin {
         for (const segment of method.path.slice(0, -1)) group = childGroup(group, segment)
         group.methods.push(method)
       }
-      return groupCli(mount, description, [family], root, deps)
+      const cli = groupCli(mount, description, [family], root, deps)
+      extend?.(cli)
+      return cli
     },
   }
 }
@@ -99,7 +108,29 @@ async function invoke(
   if (!linked.ok) return linked
   const encoded = formBody(method, linked.value)
   if (!encoded.ok) return encoded
-  const body = encoded.value
+  return send(method, encoded.value, workspace, deps)
+}
+
+/**
+ * Calls a catalog method with arguments keyed by Slack's names, for commands
+ * that compose several methods.
+ */
+export function callSlackMethod(
+  name: string,
+  args: Readonly<Record<string, string>>,
+  workspace: string | undefined,
+  deps: WebApiDeps,
+): Promise<Outcome<SlackBody>> {
+  return send(slackMethod(name), new URLSearchParams(args), workspace, deps)
+}
+
+/** Posts with the resolved token, refreshing a stored rotating token once when Slack says it expired. */
+async function send(
+  method: SlackMethod,
+  body: URLSearchParams,
+  workspace: string | undefined,
+  deps: WebApiDeps,
+): Promise<Outcome<SlackBody>> {
   const resolved = await deps.credential(workspace)
   if (!resolved.ok) return resolved
   const first = withCredentialSource(
@@ -262,7 +293,7 @@ function uncertain(method: SlackMethod, code: string, message: string): Outcome<
     : failure(code, message, true)
 }
 
-function failure(code: string, message: string, retryable?: boolean): Outcome<never> {
+export function failure(code: string, message: string, retryable?: boolean): Outcome<never> {
   return { ok: false, error: { code, message, ...(retryable ? { retryable } : undefined) } }
 }
 
@@ -270,6 +301,6 @@ function isSuccess(body: Record<string, unknown>): body is SlackBody {
   return body['ok'] === true
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

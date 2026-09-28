@@ -5,8 +5,9 @@ description: Use when reading or acting in a Slack workspace with the unofficial
 
 # slack
 
-Every command is a Slack Web API method: `a.b.c` is `slack a b c`. Output is
-Slack's own JSON. The token is the signed-in person's: reads see what they can
+Every command is a Slack Web API method: `a.b.c` is `slack a b c`, except
+`slack files download|upload`, which move file contents. Output is Slack's own
+JSON. The token is the signed-in person's: reads see what they can
 see, and writes appear under their name.
 
 ## Workspace
@@ -26,7 +27,8 @@ only when the task names a workspace other than the default, or a command exits
   `conversations history|info|members <channel>`,
   `conversations replies <channel> <ts>`, `chat getPermalink <channel> <ts>`,
   `chat postMessage <channel>`, `chat update|delete <channel> <ts>`,
-  `search messages <query>`, `files info <file>`. Everything else is a flag.
+  `search messages <query>`, `files info <file>`, `files download <file | link>`,
+  `files upload <paths...>`. Everything else is a flag.
 - Pass `--json` and select fields with `--filter-output`; raw messages carry
   mostly metadata. Do not cut reads with `--token-limit`: it can drop the
   message you need. For history and replies:
@@ -71,8 +73,8 @@ only when the task names a workspace other than the default, or a command exits
 - Commands marked `destructive` in `--llms-full` (delete, archive, kick,
   revoke) need the user's confirmation first.
 - Replies, DMs, mrkdwn formatting, mentions, edits, scheduling:
-  [references/messages.md](references/messages.md). Uploading or reading
-  files: [references/files.md](references/files.md).
+  [references/messages.md](references/messages.md). Uploading or
+  downloading files: [references/files.md](references/files.md).
 
 ## Errors
 

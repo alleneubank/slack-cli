@@ -42,11 +42,12 @@ export const TIMESTAMP_ARGUMENTS: ReadonlySet<string> = new Set([
   'ts_to',
 ])
 
-/** A line for method help where the reference states it only in prose. */
-export const METHOD_NOTES: Readonly<Record<string, string>> = {
-  'files.upload':
-    'Slack retired this method on 2025-11-12; it fails with method_deprecated. Upload with files getUploadURLExternal, an HTTP POST of the bytes to its upload_url, then files completeUploadExternal.',
-}
+/**
+ * Retired methods whose command a hand-written command replaces. The catalog
+ * keeps them; `files.upload` fails with method_deprecated since 2025-11-12, and
+ * `slack files upload` runs its replacement flow instead.
+ */
+export const REPLACED_METHODS: ReadonlySet<string> = new Set(['files.upload'])
 
 /** Methods that change state although none of their documented scopes is a `:write` scope. */
 export const MUTATING_METHODS: ReadonlySet<string> = new Set([

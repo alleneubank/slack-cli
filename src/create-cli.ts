@@ -14,6 +14,7 @@ import {
 } from './auth.js'
 import { commandError } from './errors.js'
 import { fileCredentialStore, type CredentialStore, type TeamCredentials } from './credentials.js'
+import { fileCommands } from './files.js'
 import { SLACK_METHOD_FAMILIES } from './methods.js'
 import {
   authorizeSlackUser,
@@ -24,7 +25,7 @@ import {
   type CodeDelivery,
 } from './oauth.js'
 import { SOURCE_URL, VERSION } from './version.js'
-import { SLACK_API_ORIGIN, slackWebApiFamily } from './web-api.js'
+import { SLACK_API_ORIGIN, slackWebApiFamily, type WebApiDeps } from './web-api.js'
 import { workspacesCli } from './workspaces.js'
 
 const execFileAsync = promisify(execFile)
@@ -243,9 +244,12 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
     .command(workspacesCli({ store, env }))
 
   const credential = credentialResolver({ env, store, fetch, now, clientId })
-  const origin = deps.apiOrigin ?? SLACK_API_ORIGIN
+  const webApi: WebApiDeps = { fetch, credential, origin: deps.apiOrigin ?? SLACK_API_ORIGIN }
   for (const family of SLACK_METHOD_FAMILIES)
-    cli.plugin(family, slackWebApiFamily(family, { fetch, credential, origin }))
+    cli.plugin(
+      family,
+      slackWebApiFamily(family, webApi, family === 'files' ? fileCommands(webApi) : undefined),
+    )
   return cli
 }
 

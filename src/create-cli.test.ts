@@ -1,4 +1,13 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, onTestFinished, test } from 'vitest'
@@ -427,13 +436,6 @@ describe('Slack Web API methods', () => {
     const post = await run(cli(), ['chat', 'postMessage', '--help'])
     expect(post.output).toContain('Rate limit: Special; see the reference')
     expect(post.output).toMatch(/--text <string> .*Example: Hello world\./)
-  })
-
-  test('help for a method Slack retired says so and names the replacement', async () => {
-    const upload = await run(cli(), ['files', 'upload', '--help'])
-    expect(upload.output).toContain('method_deprecated')
-    expect(upload.output).toContain('files getUploadURLExternal')
-    expect(upload.output).toContain('files completeUploadExternal')
   })
 
   test('manifests mark methods that destroy data or access as destructive', async () => {
@@ -1048,5 +1050,123 @@ describe('rotating tokens', () => {
     })
     expect(result.output).toContain('invalid_refresh_token')
     expect(result.output).not.toContain(refreshToken)
+  })
+})
+
+function outDirectory(): string {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'slack-cli-out-'))
+  onTestFinished(() => rmSync(directory, { recursive: true, force: true }))
+  return directory
+}
+
+describe('files download', () => {
+  const fileUrl = 'https://files.slack.com/files-pri/T1-F1/download/trace.png'
+  const slackFile = {
+    id: 'F1',
+    name: 'trace.png',
+    mimetype: 'image/png',
+    size: 4,
+    url_private_download: fileUrl,
+  }
+
+  /** Answers files.info and a one-message history; `fileHost` answers every other URL. */
+  function fakeFiles(fileHost: Handler, attached: unknown[] = [slackFile], info = slackFile) {
+    const requests: Request[] = []
+    const handler: Handler = (request) => {
+      requests.push(request)
+      if (request.url === `${origin}/api/files.info`) return Response.json({ ok: true, file: info })
+      if (request.url === `${origin}/api/conversations.history`)
+        return Response.json({
+          ok: true,
+          messages: [{ ts: '1789757627.925439', files: attached }],
+        })
+      return fileHost(request)
+    }
+    return { handler, requests }
+  }
+
+  test('a redirect off *.slack.com is refused and never receives the token', async () => {
+    const out = outDirectory()
+    const slack = fakeFiles(
+      () => new Response(null, { status: 302, headers: { location: 'https://cdn.example.com/x' } }),
+    )
+    const result = await run(cli({ ...withToken(), fetch: slack.handler }), [
+      'files',
+      'download',
+      'F1',
+      '--out',
+      out,
+      '--json',
+    ])
+    expect(result.exitCode).toBe(1)
+    expect(result.json()).toMatchObject({ code: 'UNTRUSTED_URL' })
+    expect(slack.requests.map((request) => new URL(request.url).host)).not.toContain(
+      'cdn.example.com',
+    )
+    expect(result.output).not.toContain(accessToken)
+    expect(existsSync(path.join(out, 'trace.png'))).toBe(false)
+  })
+
+  test('a file whose id and name would leave --out is refused and nothing is written', async () => {
+    const out = outDirectory()
+    const inner = path.join(out, 'inner')
+    mkdirSync(inner)
+    const slack = fakeFiles(() => new Response('PNG!'), [], {
+      ...slackFile,
+      id: '../escaped',
+      name: '..',
+    })
+    const result = await run(cli({ ...withToken(), fetch: slack.handler }), [
+      'files',
+      'download',
+      'F1',
+      '--out',
+      inner,
+      '--json',
+    ])
+    expect(result.json()).toMatchObject({ code: 'FILE_UNAVAILABLE' })
+    expect(readdirSync(out)).toEqual(['inner'])
+    expect(readdirSync(inner)).toEqual([])
+  })
+
+  test("Slack's sign-in page in place of the file is FILE_ACCESS_DENIED and saves nothing", async () => {
+    const out = outDirectory()
+    const slack = fakeFiles(
+      () => new Response('<html>Sign in</html>', { headers: { 'content-type': 'text/html' } }),
+    )
+    const result = await run(cli({ ...withToken(), fetch: slack.handler }), [
+      'files',
+      'download',
+      'F1',
+      '--out',
+      out,
+      '--json',
+    ])
+    expect(result.json()).toMatchObject({ code: 'FILE_ACCESS_DENIED' })
+    expect(existsSync(path.join(out, 'trace.png'))).toBe(false)
+  })
+
+  test('a Slack Connect file stub on a linked message is downloaded through files.info', async () => {
+    const out = outDirectory()
+    const slack = fakeFiles(
+      (request) =>
+        request.url === fileUrl && request.headers.get('authorization') === `Bearer ${accessToken}`
+          ? new Response('PNG!', { headers: { 'content-type': 'image/png' } })
+          : new Response('unexpected', { status: 404 }),
+      [{ id: 'F1', file_access: 'check_file_info' }],
+    )
+    const result = await run(cli({ ...withToken(), fetch: slack.handler }), [
+      'files',
+      'download',
+      'https://acme.slack.com/archives/C1/p1789757627925439',
+      '--out',
+      out,
+      '--json',
+    ])
+    expect(result.json()).toMatchObject({
+      ok: true,
+      files: [{ id: 'F1', name: 'trace.png', path: path.join(out, 'trace.png') }],
+    })
+    expect(readFileSync(path.join(out, 'trace.png'), 'utf8')).toBe('PNG!')
   })
 })

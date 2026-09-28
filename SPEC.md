@@ -41,8 +41,8 @@ output.
   reads docs.slack.dev at runtime.
 - **Overlay** — `src/overlay.ts`, hand-written facts the catalog does not
   capture: positional arguments for resource ids, mutating methods whose
-  scopes do not say `:write`, and help notes for what a reference page states
-  only in prose (a retired method and its replacement).
+  scopes do not say `:write`, and retired methods whose command a
+  hand-written one replaces (`files.upload`).
 - **incur plugin** — one plugin per top-level family (`conversations`,
   `admin`, …). Remaining name segments are subcommands:
   `users.profile.get` is `slack users profile get`.
@@ -123,9 +123,41 @@ replies`), a single Slack message link
   error, HTTP 5xx, or Slack `internal_error`/`fatal_error`/`service_unavailable`
   is retryable only for methods that do not mutate; for a write it says the
   write may have been applied.
-- **REQ-API-008** The CLI collects no data. It contacts only `slack.com`: no
+- **REQ-API-008** The CLI collects no data. It contacts only `slack.com` and
+  its subdomains (Slack's file hosts): no
   analytics, telemetry, or background update check (create-level `update` is
   `false`). `slack --update` contacts the npm registry only when run.
+- **REQ-FILES-001** `slack files download <target>` takes a file id (`F…`) or
+  a message link. A link reads that message (a reply through its thread's
+  `conversations.replies`) and downloads every file on it, or only `--file
+<id>`; a file object marked `file_access: "check_file_info"` (Slack Connect)
+  is completed with `files.info`. It fetches `url_private_download` (else
+  `url_private`) with the token as `Authorization: Bearer`, following
+  redirects by hand and sending the token only to `https://slack.com` and
+  `https://*.slack.com` on the default port; any other URL is `UNTRUSTED_URL`.
+  A transport failure prints the error's class and code, never its message.
+  A file id that is not `F` plus letters and digits is `FILE_UNAVAILABLE`,
+  and a message with more than 10 files needs `--file`. A 200 HTML answer
+  for a non-HTML file is Slack's sign-in page and fails `FILE_ACCESS_DENIED`.
+  `--out` is a directory (default: the current one), where files are saved
+  under the last path segment of their Slack name, or a file path when one file
+  is downloaded. An existing file is `FILE_EXISTS` unless `--force`. Bytes
+  stream to a temporary sibling that is hard-linked into place (renamed with
+  `--force`), so a failure leaves no partial file and a file created at the
+  path meanwhile is not replaced. Files over 1 GiB are `FILE_TOO_LARGE`. Output lists each
+  file's `id`, `name`, `mimetype`, `size`, and absolute `path`; file bytes
+  never go to stdout.
+- **REQ-FILES-002** `slack files upload <paths...>` (at most 10) opens every
+  path and checks it is a readable, non-empty regular file of at most 1 GiB
+  before calling Slack; a file that changes after the check fails
+  `FILE_CHANGED` instead of uploading other bytes. It then
+  per file calls `files.getUploadURLExternal`, POSTs the bytes to its
+  `upload_url` (which must be `https://*.slack.com`) without the token, and
+  finally calls `files.completeUploadExternal` once with `--channel`,
+  `--thread_ts`, `--title` (single file only), and `--initial_comment`, printing
+  Slack's response. A message link for `--channel` shares into that message's
+  thread. It mutates and accepts `--dry-run`. It replaces the command for the
+  retired `files.upload` method.
 - **REQ-MCP-002** This CLI does not present itself as an MCP server:
   create-level `mcp` is `false`, and README does not tell users to run
   `mcp add` or `--mcp` on `slack`. `slack skills add` installs one
@@ -288,6 +320,9 @@ replies`), a single Slack message link
 - REQ-API-002 / REQ-API-003 / REQ-API-005 / REQ-API-006 / REQ-API-007 / REQ-TEST-001 —
   `src/create-cli.test.ts` (injected fetch: body allowlist, HTTP errors,
   429, oversize) and live workspace runs
+- REQ-FILES-001 / REQ-FILES-002 — `src/create-cli.test.ts` (off-Slack
+  redirect never gets the token, sign-in page, Slack Connect stub) and a live
+  upload into a thread and byte-exact download in the test workspace
 - REQ-API-004 — `src/create-cli.test.ts` (unauthenticated method run;
   `--help` / `--version`)
 - REQ-API-008 — a pseudo-terminal run of `slack auth test` against a local
