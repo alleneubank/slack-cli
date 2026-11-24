@@ -10,7 +10,8 @@ export const slackAppSchema: z.ZodEnum<{ shared: 'shared'; own: 'own' }> = z
 
 type SlackApp = z.infer<typeof slackAppSchema>
 
-const clientIdPattern = /^\d+\.\d+$/
+/** A Slack app's OAuth client id, as Slack issues it. */
+export const CLIENT_ID_PATTERN: RegExp = /^\d+\.\d+$/
 
 /**
  * Parses a `--client-id` or `SLACK_CLIENT_ID` value: a Slack app's client id,
@@ -18,7 +19,7 @@ const clientIdPattern = /^\d+\.\d+$/
  */
 export function parseClientId(value: string): string | undefined {
   if (value === 'shared') return SLACK_OAUTH_CLIENT_ID
-  return clientIdPattern.test(value) ? value : undefined
+  return CLIENT_ID_PATTERN.test(value) ? value : undefined
 }
 
 export function slackApp(clientId: string): SlackApp {

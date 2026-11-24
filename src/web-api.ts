@@ -17,6 +17,8 @@ const workspaceGlobals = z.object({ workspace: z.string().optional() })
 export type Credential =
   | { token: string; source: 'environment' }
   | { token: string; source: 'stored'; refresh?: (() => Promise<Outcome<string>>) | undefined }
+  /** An app configuration token, read for one App Manifest API call and never stored. */
+  | { token: string; source: 'configuration' }
 
 export type WebApiDeps = {
   fetch: (request: Request) => Response | Promise<Response>
@@ -138,7 +140,8 @@ async function send(
     resolved.value.source,
   )
   const expired = !first.ok && first.error.code === 'token_expired'
-  if (!expired || resolved.value.source === 'environment' || resolved.value.refresh === undefined)
+  // Only a stored login can be refreshed; other tokens are reported as Slack rejected them.
+  if (!expired || resolved.value.source !== 'stored' || resolved.value.refresh === undefined)
     return first
   const refreshed = await resolved.value.refresh()
   if (!refreshed.ok) return refreshed
@@ -228,14 +231,14 @@ async function post(
 
   const text = await readBounded(response, SLACK_RESPONSE_BYTES_MAX)
   if (text === undefined)
-    return failure('BAD_RESPONSE', `Slack response exceeded ${SLACK_RESPONSE_BYTES_MAX} bytes`)
+    return unreadable(method, `Slack response exceeded ${SLACK_RESPONSE_BYTES_MAX} bytes`)
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    return failure('BAD_RESPONSE', 'Slack response is not JSON')
+    return unreadable(method, 'Slack response is not JSON')
   }
-  if (!isRecord(parsed)) return failure('BAD_RESPONSE', 'Slack response is not a JSON object')
+  if (!isRecord(parsed)) return unreadable(method, 'Slack response is not a JSON object')
   if (!isSuccess(parsed)) {
     const code = typeof parsed['error'] === 'string' ? parsed['error'] : 'unknown_error'
     const message = slackErrorMessage(method.name, code, parsed)
@@ -271,7 +274,7 @@ async function readBounded(response: Response, bytesMax: number): Promise<string
   return new TextDecoder().decode(Buffer.concat(chunks))
 }
 
-/** Slack's error code plus the detail Slack returns for scope and argument errors. */
+/** Slack's error code plus the detail Slack returns for scope, argument, and manifest errors. */
 function slackErrorMessage(
   methodName: string,
   code: string,
@@ -282,15 +285,38 @@ function slackErrorMessage(
   const metadata = body['response_metadata']
   if (isRecord(metadata) && Array.isArray(metadata['messages']))
     details.push(...metadata['messages'].filter((item) => typeof item === 'string'))
+  // App Manifest APIs list each problem with a JSON pointer into the manifest.
+  if (Array.isArray(body['errors']))
+    for (const problem of body['errors'])
+      if (isRecord(problem) && typeof problem['message'] === 'string')
+        details.push(
+          typeof problem['pointer'] === 'string'
+            ? `${problem['pointer']}: ${problem['message']}`
+            : problem['message'],
+        )
   const suffix = details.length > 0 ? ` (${details.join('; ')})` : ''
   return `Slack Web API ${methodName} failed: ${code}${suffix}`
 }
 
 /** A read can be retried; a write may already have taken effect, so retrying could repeat it. */
 function uncertain(method: SlackMethod, code: string, message: string): Outcome<never> {
-  return method.mutates
-    ? failure(code, `${message}; the write may have been applied, so check before retrying`)
-    : failure(code, message, true)
+  return method.mutates ? mayHaveApplied(code, message) : failure(code, message, true)
+}
+
+/** Slack answered, but not readably: a write may have taken effect, a read has nothing to retry. */
+function unreadable(method: SlackMethod, message: string): Outcome<never> {
+  return method.mutates ? mayHaveApplied('BAD_RESPONSE', message) : failure('BAD_RESPONSE', message)
+}
+
+function mayHaveApplied(code: string, message: string): Outcome<never> {
+  return {
+    ok: false,
+    error: {
+      code,
+      message: `${message}; the write may have been applied, so check before retrying`,
+      mayHaveApplied: true,
+    },
+  }
 }
 
 export function failure(code: string, message: string, retryable?: boolean): Outcome<never> {

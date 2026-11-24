@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { Cli, z } from '@alleneubank/incur'
@@ -11,6 +12,7 @@ import {
   selectedWorkspace,
   unknownWorkspace,
 } from './auth.js'
+import { appCli, type ConfigurationTokenReader } from './app.js'
 import { commandError } from './errors.js'
 import { fileCredentialStore, type CredentialStore } from './credentials.js'
 import { fileCommands } from './files.js'
@@ -39,6 +41,8 @@ export type CreateCliDeps = {
   /** HTTP to slack.com: Web API methods and the OAuth token endpoint. */
   fetch?: ((request: Request) => Response | Promise<Response>) | undefined
   apiOrigin?: string | undefined
+  /** Reads the app configuration token for `slack app create`. */
+  readConfigurationToken?: ConfigurationTokenReader | undefined
   now?: (() => number) | undefined
 }
 
@@ -180,6 +184,14 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
       },
     })
     .command(workspacesCli({ store, env }))
+    .command(
+      appCli({
+        ...loginDeps,
+        origin: deps.apiOrigin ?? SLACK_API_ORIGIN,
+        manifestPath: path.join(packageRoot, 'slack-app-manifest.json'),
+        readConfigurationToken: deps.readConfigurationToken,
+      }),
+    )
 
   // Entries stored before login recorded a client id were issued by SLACK_CLIENT_ID's app or the shared one.
   const variable = nonEmpty(env['SLACK_CLIENT_ID'])

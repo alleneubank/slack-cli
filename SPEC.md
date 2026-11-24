@@ -128,7 +128,7 @@ replies`), a single Slack message link
   `UNKNOWN_WORKSPACE` carry the command to run as a CTA. A timeout, network
   error, HTTP 5xx, or Slack `internal_error`/`fatal_error`/`service_unavailable`
   is retryable only for methods that do not mutate; for a write it says the
-  write may have been applied.
+  write may have been applied, as does a `BAD_RESPONSE` to a write.
 - **REQ-API-008** The CLI collects no data. It contacts only `slack.com` and
   its subdomains (Slack's file hosts): no
   analytics, telemetry, or background update check (create-level `update` is
@@ -224,6 +224,24 @@ replies`), a single Slack message link
   Scopes are opt-in because they are most of the output (about 60 per
   workspace) and a `missing_scope` error already names the scope it needs. `slack workspaces use
 <team>` makes a stored workspace current.
+- **REQ-AUTH-007** `slack app create [--write] [--paste]` reads an app
+  configuration token from a hidden terminal prompt, or from stdin when stdin
+  is not a terminal, and never from argv or the environment. Empty input is
+  `CONFIG_TOKEN_REQUIRED`; input that is not `xoxe.xoxp-…` is
+  `INVALID_ARGUMENT`, without echoing it. It calls `apps.manifest.create` with
+  the token as `Authorization: Bearer` and the bundled
+  `slack-app-manifest.json` text, keeps only `app_id` and
+  `credentials.client_id` from the answer, then signs in through that client
+  id as `slack login --client-id` would and reports `appId` with the login
+  output. When Slack rejects the token, the error says to generate a new one
+  and exits 1; `invalid_manifest` lists each problem with its pointer. When
+  Slack's answer is lost or unreadable, the app may exist, so the error says
+  to check https://api.slack.com/apps and finish with `slack login
+--client-id` instead of creating another. When sign-in fails after the app
+  exists, the error names the app and its CTA is `slack login --client-id <id>`
+  with the `--write` and `--paste` that were given. Piped stdin must end
+  within the login timeout; Ctrl-D ends the hidden prompt. It accepts
+  `--dry-run`, which reads no token and calls nothing.
 - **REQ-TEST-001** Unit tests assert observable CLI output against injected
   OAuth and Web API `fetch` for cases the live workspace cannot produce on
   demand (HTTP errors, rate limits, oversize bodies, secret redaction,
@@ -242,6 +260,8 @@ replies`), a single Slack message link
   collection.
 - A refresh token is used at most once; the credentials file never holds a
   revoked refresh token after a successful refresh.
+- An app configuration token, client secret, signing secret, or verification
+  token is never stored, printed, or passed in argv or the environment.
 
 ## Non-goals
 
@@ -250,7 +270,8 @@ replies`), a single Slack message link
 - Fetching docs.slack.dev at runtime.
 - An untyped `slack api <method>` escape hatch.
 - Auto-pagination or merged multi-page output.
-- Creating the Slack app. `slack login` runs user OAuth once it exists.
+- Managing the Slack app after creation: updating its manifest, deleting it,
+  or distributing it.
 - Inventing fields Slack did not return.
 
 ## Decisions
@@ -319,6 +340,11 @@ replies`), a single Slack message link
   client id may be a flag: under PKCE it is public (the authorize URL carries
   it). `SLACK_CLIENT_ID` keeps precedence over the stored app as an explicit
   override.
+- `slack app create` does not revoke the shared app's token for the workspace:
+  Slack issues one token per user and app, so revoking it would sign the user
+  out on every other machine that uses the shared app there. It prints where
+  to remove the shared app instead. It does not store the app id; a later
+  manifest update would need it.
 - The manifest is JSON (`slack-app-manifest.json`): `apps.manifest.create`
   takes JSON, Slack's "Paste a manifest" dialog accepts it, and the package
   needs no YAML parser.
@@ -362,6 +388,9 @@ replies`), a single Slack message link
 - Login client id — `src/create-cli.test.ts` (flag, variable, stored app,
   and shared app precedence; re-login keeps the stored app; malformed ids);
   a live re-login in the test workspace through its own app
+- REQ-AUTH-007 — `src/create-cli.test.ts` (the configuration token and the
+  app's secrets reach no output or file; sign-in failure after create; token
+  and manifest rejections); a live `slack app create` in the test workspace
 - Login scopes — `src/login.test.ts` (plain login requests no scope a
   state-changing method accepts; the manifest lists exactly the requested
   scopes)

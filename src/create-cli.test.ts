@@ -61,8 +61,10 @@ function cli(
     env?: Record<string, string | undefined>
     oauth?: OauthHost
     now?: () => number
+    configurationToken?: string
   } = {},
 ) {
+  const { configurationToken } = options
   return createCli({
     version: '0.0.0',
     apiOrigin: origin,
@@ -71,6 +73,9 @@ function cli(
     fetch: options.fetch ?? (() => Response.json({ ok: true })),
     now: options.now ?? (() => start),
     ...(options.oauth ? { oauth: options.oauth } : undefined),
+    ...(configurationToken === undefined
+      ? undefined
+      : { readConfigurationToken: async () => `${configurationToken}\n` }),
   })
 }
 
@@ -1274,5 +1279,169 @@ describe('files download', () => {
       files: [{ id: 'F1', name: 'trace.png', path: path.join(out, 'trace.png') }],
     })
     expect(readFileSync(path.join(out, 'trace.png'), 'utf8')).toBe('PNG!')
+  })
+})
+
+/** Browser side of a loopback login whose code comes from `code`. */
+function consentHost(code: () => Promise<{ code: string }>, terminal: string[] = []): OauthHost {
+  return {
+    timeoutMs: 1_000,
+    write: (text) => {
+      if (!text.startsWith('Authorize Slack:')) terminal.push(text)
+    },
+    async openUrl() {},
+    waitForCode: code,
+    async readPastedCode() {
+      throw new Error('not a paste login')
+    },
+  }
+}
+
+describe('app create', () => {
+  const configurationToken = 'xoxe.xoxp-1-configuration-not-a-secret'
+  const appSecrets = {
+    client_secret: 'client-secret-not-a-secret',
+    verification_token: 'verification-not-a-secret',
+    signing_secret: 'signing-secret-not-a-secret',
+  }
+  const created = {
+    ok: true,
+    app_id: 'A0OWNAPP',
+    credentials: { client_id: '1111111111.2222222222', ...appSecrets },
+    oauth_authorize_url: 'https://slack.com/oauth/v2/authorize?client_id=1111111111.2222222222',
+  }
+
+  test('creates the app from the manifest, signs in through it, and keeps none of its secrets', async () => {
+    const file = credentialsFile(
+      rotatingStore({ T1: { accessToken: 'xoxp-old', clientId: SLACK_OAUTH_CLIENT_ID } }),
+    )
+    const manifestRequests: { auth: string | null; manifest: string | null }[] = []
+    const terminal: string[] = []
+    const result = await run(
+      cli({
+        file,
+        configurationToken,
+        fetch: async (request) => {
+          const body = new URLSearchParams(await request.text())
+          if (new URL(request.url).pathname === '/api/apps.manifest.create') {
+            manifestRequests.push({
+              auth: request.headers.get('authorization'),
+              manifest: body.get('manifest'),
+            })
+            return Response.json(created)
+          }
+          expect(body.get('client_id')).toBe('1111111111.2222222222')
+          return Response.json({
+            ok: true,
+            access_token: 'xoxp-own-not-a-secret',
+            scope: 'channels:history',
+            team: { id: 'T1', name: 'Own' },
+            authed_user: { id: 'U1' },
+          })
+        },
+        oauth: consentHost(async () => ({ code: 'auth-code-not-a-secret' }), terminal),
+      }),
+      ['app', 'create', '--json'],
+    )
+    expect(result.exitCode).toBeUndefined()
+    expect(result.json()).toEqual({
+      ok: true,
+      appId: 'A0OWNAPP',
+      teamId: 'T1',
+      teamName: 'Own',
+      userId: 'U1',
+      clientId: '1111111111.2222222222',
+      app: 'own',
+      scopes: ['channels:history'],
+    })
+    expect(manifestRequests).toEqual([
+      {
+        auth: `Bearer ${configurationToken}`,
+        manifest: readFileSync(new URL('../slack-app-manifest.json', import.meta.url), 'utf8'),
+      },
+    ])
+    expect(terminal).toEqual([
+      'Created app A0OWNAPP (client id 1111111111.2222222222).\n',
+      'App: own app 1111111111.2222222222\n',
+      'T1 now signs in through own app 1111111111.2222222222 instead of the shared app\n',
+      'If this workspace also signed in through the shared app, it stays authorized there; remove it under Manage apps in Slack.\n',
+    ])
+    const stored = readFileSync(file, 'utf8')
+    expect(readCredentials(file).teams['T1']?.clientId).toBe('1111111111.2222222222')
+    for (const secret of [configurationToken, ...Object.values(appSecrets)]) {
+      expect(result.output).not.toContain(secret)
+      expect(terminal.join('')).not.toContain(secret)
+      expect(stored).not.toContain(secret)
+    }
+  })
+
+  test('a sign-in that fails after the app exists points at login through that app', async () => {
+    let creates = 0
+    const result = await run(
+      cli({
+        configurationToken,
+        fetch: () => {
+          creates += 1
+          return Response.json(created)
+        },
+        oauth: consentHost(async () => {
+          throw new Error('Timed out waiting for the Slack authorization')
+        }),
+      }),
+      ['app', 'create', '--write', '--json'],
+    )
+    expect(result.exitCode).toBe(1)
+    expect(creates).toBe(1)
+    expect(result.json()).toMatchObject({
+      code: 'SIGN_IN_FAILED',
+      message: expect.stringContaining('Created app A0OWNAPP') as unknown,
+      cta: { commands: [{ command: 'slack login --client-id 1111111111.2222222222 --write' }] },
+    })
+    expect(result.output).not.toContain(configurationToken)
+  })
+
+  test('Slack rejections name what to fix and never ask for login', async () => {
+    const rejected = async (body: unknown) =>
+      run(cli({ configurationToken, fetch: () => Response.json(body) }), [
+        'app',
+        'create',
+        '--json',
+      ])
+
+    const expired = await rejected({ ok: false, error: 'token_expired' })
+    expect(expired.exitCode).toBe(1)
+    expect(expired.json().message).toContain('generate a new app configuration token')
+    expect(expired.json().cta).toBeUndefined()
+
+    const invalid = await rejected({
+      ok: false,
+      error: 'invalid_manifest',
+      errors: [{ message: 'Invalid scope', pointer: '/oauth_config/scopes/user/0' }],
+    })
+    expect(invalid.exitCode).toBe(1)
+    expect(invalid.json()).toMatchObject({
+      code: 'invalid_manifest',
+      message: expect.stringContaining('/oauth_config/scopes/user/0: Invalid scope') as unknown,
+    })
+    // The request may have reached Slack, so the app may exist: finish it rather than create another.
+    const lost = await run(
+      cli({
+        configurationToken,
+        fetch: () => {
+          throw new TypeError('fetch failed')
+        },
+      }),
+      ['app', 'create', '--paste', '--json'],
+    )
+    expect(lost.exitCode).toBe(1)
+    expect(lost.json()).toMatchObject({
+      code: 'NETWORK',
+      message: expect.stringContaining(
+        'finish with slack login --client-id <its Client ID> --paste instead of creating another',
+      ) as unknown,
+    })
+
+    for (const result of [expired, invalid, lost])
+      expect(result.output).not.toContain(configurationToken)
   })
 })

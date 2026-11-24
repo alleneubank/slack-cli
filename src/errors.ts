@@ -8,8 +8,10 @@ export type Failure = {
   retryable?: boolean | undefined
   /** Scopes Slack named for `missing_scope`; any one of them is enough. */
   neededScopes?: string[] | undefined
+  /** A write Slack did not confirm or reject; it may have taken effect. Never in command output. */
+  mayHaveApplied?: boolean | undefined
   /** Where the rejected token came from; never included in command output. */
-  credentialSource?: 'environment' | 'stored' | undefined
+  credentialSource?: 'environment' | 'stored' | 'configuration' | undefined
 }
 
 export type Outcome<value> = { ok: true; value: value } | { ok: false; error: Failure }
@@ -52,9 +54,14 @@ const tokenRejected = new Set([
 
 /** Maps a failure to the exit code and next step an agent acts on. */
 export function commandError(failure: Failure): CommandError {
-  const { neededScopes, credentialSource, ...error } = failure
+  const { neededScopes, credentialSource, mayHaveApplied: _mayHaveApplied, ...error } = failure
   if (error.retryable === true) return { ...error, exitCode: EXIT_RETRYABLE }
   if (error.code === 'UNKNOWN_WORKSPACE') return { ...error, cta: { commands: [listWorkspaces] } }
+  if (credentialSource === 'configuration' && tokenRejected.has(error.code))
+    return {
+      ...error,
+      message: `${error.message}; generate a new app configuration token at https://api.slack.com/apps`,
+    }
   if (
     credentialSource === 'environment' &&
     (tokenRejected.has(error.code) || error.code === 'missing_scope')
