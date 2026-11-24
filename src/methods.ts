@@ -3,6 +3,7 @@ import { z } from '@alleneubank/incur'
 import catalogJson from './catalog.json' with { type: 'json' }
 import { HISTORY_WINDOW_OPTIONS, MESSAGE_LINK_SHAPE } from './message-links.js'
 import {
+  INSTEAD_OF,
   isDestructive,
   MESSAGE_LINK_METHODS,
   MUTATING_METHODS,
@@ -14,9 +15,9 @@ import {
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
 const catalog = catalogJson as Catalog
-for (const name of REPLACED_METHODS)
+for (const name of [...REPLACED_METHODS, ...Object.keys(INSTEAD_OF)])
   if (!catalog.methods.some((method) => method.name === name))
-    throw new Error(`Replaced method ${name} is not a catalog method`)
+    throw new Error(`Overlay method ${name} is not a catalog method`)
 
 /** Flags the CLI owns. A Slack argument with one of these names is exposed as `--slack_<name>`. */
 const reservedFlags: ReadonlySet<string> = new Set([
@@ -206,7 +207,8 @@ function optionSchema(argument: CatalogArgument): z.ZodType {
 }
 
 function hint(method: CatalogMethod): string {
-  const lines: string[] = []
+  const instead = INSTEAD_OF[method.name]
+  const lines: string[] = instead === undefined ? [] : [instead]
   if (method.scopes.user.length > 0)
     lines.push(`User token scopes: ${method.scopes.user.join(', ')}`)
   if (method.rateLimit !== undefined)

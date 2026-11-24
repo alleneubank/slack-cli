@@ -175,7 +175,11 @@ replies`), a single Slack message link
   that is not stored is `UNKNOWN_WORKSPACE`, listing the stored team ids. An unreadable or malformed
   credentials file is `CREDENTIALS_INVALID`.
 - **REQ-AUTH-002** Command output and errors never echo an access token,
-  refresh token, client secret, or authorization code. Root `--help` lists
+  refresh token, client secret, or authorization code. Every Web API response
+  is redacted where it is parsed: a string under `token` or any key ending in
+  `_token` or `_secret`, at any depth, becomes `[redacted]`, and the response
+  gains `redacted`, the paths replaced (`credentials.client_secret`).
+  `slack apps manifest create --help` points to `slack app create`. Root `--help` lists
   `SLACK_TOKEN`, `SLACK_WORKSPACE`, and `SLACK_CLIENT_ID`; a set `SLACK_TOKEN`
   shows only `(set)`.
 - **REQ-AUTH-003** `slack login` authorizes with public PKCE through the app
