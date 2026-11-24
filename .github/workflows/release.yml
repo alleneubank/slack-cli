@@ -22,6 +22,8 @@ jobs:
   release:
     name: Create GitHub release
     runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.release.outputs.skip }}
     steps:
       - name: Check out release tag
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
@@ -220,3 +222,48 @@ jobs:
           }
 
           retry ensure_release
+
+  binaries:
+    name: Attach compiled binaries
+    needs: release
+    if: needs.release.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - uses: nubjs/setup-nub@v0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: nub ci
+
+      - name: Compile and smoke-test
+        env:
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          scripts/compile-binaries.sh "$RUNNER_TEMP/binaries"
+          tar -xzf "$RUNNER_TEMP/binaries/slack-$version-linux-x64.tar.gz" -C "$RUNNER_TEMP"
+          scripts/smoke-binary.sh "$RUNNER_TEMP/slack-$version-linux-x64/bin/slack" "$version"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/binaries/*.tar.gz
+
+      - name: Upload to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG_NAME" "$RUNNER_TEMP"/binaries/*.tar.gz "$RUNNER_TEMP/binaries/SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" --clobber
