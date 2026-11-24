@@ -159,14 +159,12 @@ describe('login scopes', () => {
   })
 
   test('the app manifest lists exactly the scopes login requests', () => {
-    const manifest = readFileSync(new URL('../slack-app-manifest.yaml', import.meta.url), 'utf8')
-    const heading = '\n    user:\n'
-    const item = '      - '
-    expect(manifest).toContain(heading)
-    const lines = manifest.slice(manifest.indexOf(heading) + heading.length).split('\n')
-    const end = lines.findIndex((line) => !line.startsWith(item))
-    const listed = lines.slice(0, end).map((line) => line.slice(item.length))
-    expect(listed.toSorted()).toEqual([...OAUTH_READ_SCOPES, ...OAUTH_WRITE_SCOPES].toSorted())
+    const manifest = JSON.parse(
+      readFileSync(new URL('../slack-app-manifest.json', import.meta.url), 'utf8'),
+    ) as { oauth_config: { scopes: { user: string[] } } }
+    expect(manifest.oauth_config.scopes.user.toSorted()).toEqual(
+      [...OAUTH_READ_SCOPES, ...OAUTH_WRITE_SCOPES].toSorted(),
+    )
   })
 })
 

@@ -48,8 +48,9 @@ from Slack straight to your machine; the app's developers never receive it.
 
 Each login adds the authorized workspace to
 `~/.config/slack-cli/credentials.json` (mode 0600) and makes it current.
-`slack workspaces list` shows the stored workspaces, the current one, and token
-expiry, never the tokens; `--scopes` adds the granted scopes. `slack workspaces use
+`slack workspaces list` shows the stored workspaces, the current one, the
+Slack app each signed in through, and token expiry, never the tokens;
+`--scopes` adds the granted scopes. `slack workspaces use
 T0123456789` changes the current workspace; `--workspace T0123456789` or
 `SLACK_WORKSPACE` picks one for a single command. `slack logout` removes the
 selected workspace; `slack logout --all` removes every one.
@@ -88,15 +89,27 @@ app is not listed in the Slack Marketplace, so Slack
 its new installs: `conversations history` and `conversations replies` return
 at most 15 messages per call and allow 1 request per minute. An app created in
 your own workspace keeps the normal limits. To use an app you control, create
-one from
-[`slack-app-manifest.yaml`](slack-app-manifest.yaml) at
-[api.slack.com/apps](https://api.slack.com/apps) ("Create New App" → "From a
-manifest"), then point the CLI at its client id:
+one from [`slack-app-manifest.json`](slack-app-manifest.json) at
+[api.slack.com/apps](https://api.slack.com/apps) ("Create New App" → "Paste a
+manifest", paste the file, choose the workspace, "Create and Install"). Close
+the install page Slack opens, copy the Client ID from the app's "Basic
+Information" page, and sign in through it:
 
 ```sh
-export SLACK_CLIENT_ID=1234567890.1234567890
-slack login
+slack login --client-id 1234567890.1234567890 --write
 ```
+
+The workspace keeps that app: `slack login`, with or without `--write`, signs
+in through the client id stored for the workspace named by `--workspace` or
+`SLACK_WORKSPACE`, else the current one, and `slack workspaces list` shows
+`app: own` with the client id. Login prints the app it uses before the
+authorize URL. `SLACK_CLIENT_ID` overrides the stored app for every login.
+
+An app that is not distributed can sign in only the workspace that created it.
+While such a workspace is current, add another workspace with
+`slack login --client-id shared` (the project's app) or with that workspace's
+own client id. Only the workspace that signs in is changed; the new one becomes
+current, and `slack workspaces use` switches back.
 
 The manifest registers the same HTTPS redirect page, which works for any
 client id, and keeps token rotation off so tokens need no client secret to

@@ -9,6 +9,7 @@ import {
 } from './auth.js'
 import type { CredentialStore, TeamCredentials } from './credentials.js'
 import { commandError } from './errors.js'
+import { slackApp, slackAppSchema } from './slack-app.js'
 
 export type WorkspacesDeps = {
   store: CredentialStore
@@ -22,6 +23,11 @@ const workspaceSchema = z.object({
   teamName: z.string().optional(),
   userId: z.string().optional(),
   current: z.boolean().describe('Commands use this workspace unless --workspace names another'),
+  clientId: z
+    .string()
+    .optional()
+    .describe('Client id of the Slack app the workspace signed in through; slack login reuses it'),
+  app: slackAppSchema.optional(),
   rotating: z.boolean().describe('The token expires and is refreshed automatically'),
   expiresAt: z.string().optional().describe('When the stored access token expires (ISO 8601)'),
   scopes: z
@@ -99,6 +105,9 @@ function describe(teamId: string, team: TeamCredentials, current: boolean, inclu
     ...(team.teamName === undefined ? undefined : { teamName: team.teamName }),
     ...(team.userId === undefined ? undefined : { userId: team.userId }),
     current,
+    ...(team.clientId === undefined
+      ? undefined
+      : { clientId: team.clientId, app: slackApp(team.clientId) }),
     rotating: team.refreshToken !== undefined,
     ...(team.expiresAt === undefined
       ? undefined

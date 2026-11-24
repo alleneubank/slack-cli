@@ -70,7 +70,15 @@ export function selectedWorkspace(
   env: Record<string, string | undefined>,
   file: CredentialsFile,
 ): string | undefined {
-  return nonEmpty(workspace) ?? nonEmpty(env['SLACK_WORKSPACE']) ?? file.currentTeamId
+  return namedWorkspace(workspace, env) ?? file.currentTeamId
+}
+
+/** The workspace named by `--workspace`, else `SLACK_WORKSPACE`; never the current one. */
+export function namedWorkspace(
+  workspace: string | undefined,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  return nonEmpty(workspace) ?? nonEmpty(env['SLACK_WORKSPACE'])
 }
 
 export async function readStore(store: CredentialReader): Promise<Outcome<CredentialsFile>> {
@@ -165,6 +173,6 @@ function failure(code: string, message: string): Outcome<never> {
   return { ok: false, error }
 }
 
-function nonEmpty(value: string | undefined): string | undefined {
+export function nonEmpty(value: string | undefined): string | undefined {
   return value !== undefined && value.length > 0 ? value : undefined
 }

@@ -235,6 +235,8 @@ export type AuthorizeSlackUserOptions = {
   timeoutMs?: number | undefined
   scope?: string | undefined
   delivery?: CodeDelivery | undefined
+  /** Team id Slack should open for consent; a hint the user can change there. */
+  team?: string | undefined
 }
 
 /** Slack user OAuth with public PKCE: browser consent, relayed code, code exchange. */
@@ -256,6 +258,7 @@ export async function authorizeSlackUser(
   authorizeUrl.searchParams.set('code_challenge_method', 'S256')
   authorizeUrl.searchParams.set('state', state)
   authorizeUrl.searchParams.set('scope', scope)
+  if (options.team !== undefined) authorizeUrl.searchParams.set('team', options.team)
 
   const authorize = authorizeUrl.toString()
   // Announce first so a paste prompt follows the URL; wait before the browser

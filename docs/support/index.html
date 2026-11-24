@@ -65,10 +65,11 @@
       <p>
         Some workspaces restrict third-party apps; ask a workspace admin to approve it. You can also
         create your own Slack app from the project's
-        <a href="https://github.com/alleneubank/slack-cli/blob/main/slack-app-manifest.yaml"
+        <a href="https://github.com/alleneubank/slack-cli/blob/main/slack-app-manifest.json"
           >app manifest</a
         >
-        and set <code>SLACK_CLIENT_ID</code> to its client id.
+        and sign in with <code>slack login --client-id</code> and its client id. Later logins for
+        that workspace keep using it.
       </p>
 
       <h3>Working with several workspaces</h3>

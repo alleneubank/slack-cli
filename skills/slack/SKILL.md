@@ -19,6 +19,13 @@ only when the task names a workspace other than the default, or a command exits
 `--workspace` on every command: ids from another workspace fail with
 `channel_not_found`.
 
+A workspace whose `app` in `slack workspaces list --json` is `shared` gets at
+most 15 messages per `conversations history|replies` call and one such call a
+minute. When that blocks the task, tell the user that signing the workspace in
+through its own Slack app removes the limit (README, "Using your own Slack
+app"). `slack login` keeps a workspace on the app it last used; to add another
+workspace while one on its own app is current, use `slack login --client-id shared`.
+
 ## Commands
 
 - `slack <family> <method> --help` shows arguments, response fields, and scopes;
