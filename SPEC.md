@@ -184,8 +184,9 @@ replies`), a single Slack message link
   the current one, else the shared app's. Both inputs take `<digits>.<digits>`
   or `shared` (the shared app); anything else is `INVALID_ARGUMENT` before any
   request. Before the authorize URL, login prints `App: shared` or
-  `App: own app <client id>`, naming the stored workspace when it supplied the
-  id. A workspace named by `--workspace` or `SLACK_WORKSPACE`, stored or not,
+  `App: own app <client id>`, followed by what chose it: `(from --client-id)`,
+  `(from SLACK_CLIENT_ID)`, or `(stored for <team>)`; nothing for the
+  default. A workspace named by `--workspace` or `SLACK_WORKSPACE`, stored or not,
   is sent as the authorize URL's `team` hint. The Slack app sets
   `pkce_enabled: true`, `token_rotation_enabled: false`, and registers only the
   HTTPS redirect `https://alleneubank.github.io/slack-cli/callback/` (Slack

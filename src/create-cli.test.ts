@@ -737,7 +737,7 @@ describe('workspaces', () => {
     expect([named.clientId, named.team]).toEqual([SLACK_OAUTH_CLIENT_ID, 'T2'])
     // Slack signs in T1 although T2 was named, as when the user switches workspace on the consent page.
     expect(named.terminal).toEqual([
-      'App: shared\n',
+      'App: shared (stored for T2)\n',
       `T1 now signs in through the shared app instead of own app ${own}\n`,
     ])
 
@@ -748,7 +748,7 @@ describe('workspaces', () => {
     expect(variable.clientId).toBe('3333333333.4444444444')
     expect(variable.stored?.clientId).toBe('3333333333.4444444444')
     expect(variable.terminal).toEqual([
-      'App: own app 3333333333.4444444444\n',
+      'App: own app 3333333333.4444444444 (from SLACK_CLIENT_ID)\n',
       `T1 now signs in through own app 3333333333.4444444444 instead of own app ${own}\n`,
     ])
 
@@ -756,6 +756,7 @@ describe('workspaces', () => {
       SLACK_CLIENT_ID: '3333333333.4444444444',
     })
     expect(flag.clientId).toBe(SLACK_OAUTH_CLIENT_ID)
+    expect(flag.terminal[0]).toBe('App: shared (from --client-id)\n')
     expect(flag.result.json()).toMatchObject({ clientId: SLACK_OAUTH_CLIENT_ID, app: 'shared' })
 
     for (const invalid of [
