@@ -1,5 +1,16 @@
 # @alleneubank/slack-cli
 
+## 0.6.0
+
+### Minor Changes
+
+- 55384dd: New `slack app create [--write]` creates a workspace's own Slack app from the bundled manifest and signs the workspace in through it, so history reads are not capped like the shared app's. It reads an app configuration token from a hidden prompt or stdin, uses it for that one `apps.manifest.create` call, and never stores or prints it or the new app's secrets.
+- 4258556: A workspace keeps the Slack app it signed in through. `slack login --client-id <id>` signs in through a workspace's own app, and a later `slack login` for that workspace reuses the stored client id without `SLACK_CLIENT_ID`; before, it silently moved the workspace back to the shared app, whose history reads Slack caps at 15 messages per call. `--client-id shared` names the shared app. Login prints which app it uses, and `slack login` and `slack workspaces list` report `clientId` and `app` (`shared` or `own`). The app manifest is now `slack-app-manifest.json`.
+
+### Patch Changes
+
+- ecf0cb5: A Slack response cut off or timed out after its headers is now a `NETWORK` or `TIMEOUT` failure like one lost before them: retryable for reads, and for writes it says the write may have been applied. Before, it surfaced as `UNKNOWN`. The 30-second request deadline now also ends a response body that stalls, which could hang until Slack closed the connection.
+
 ## 0.5.0
 
 ### Minor Changes
