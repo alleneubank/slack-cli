@@ -424,7 +424,11 @@ export async function listenForLoopbackCode(input: {
       finish(error)
     })
     const timer = setTimeout(() => {
-      finish(new Error(`OAuth timed out after ${input.timeoutMs}ms`))
+      finish(
+        new Error(
+          `OAuth timed out after ${input.timeoutMs}ms; if Slack said "Invalid permissions requested", run slack app update, then slack login`,
+        ),
+      )
     }, input.timeoutMs)
     cancel = () => finish(new Error('Login ended before the authorization code arrived'))
   })

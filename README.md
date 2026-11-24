@@ -113,6 +113,20 @@ needs neither. If sign-in fails after the app exists, the error names the
 again would create a second app. An earlier authorization of the project's
 app in that workspace stays in place; remove it under Manage apps in Slack.
 
+The workspace records the new app's id. When a later release requests scopes
+the app lacks, Slack's consent page says "Invalid permissions requested";
+add them with a new configuration token, then sign in again:
+
+```sh
+slack app update                 # paste at the hidden prompt, or pipe it on stdin
+slack login --write
+```
+
+`slack app update` reads the app's manifest, adds the user scopes, redirect,
+and PKCE setting that login needs, and keeps the app's name, icon, and other
+scopes. Running it again changes nothing. For an app made by hand, pass its
+App ID: `slack app update --app A0123456789`.
+
 To create the app by hand instead, paste the manifest at
 [api.slack.com/apps](https://api.slack.com/apps) ("Create New App" → "Paste a
 manifest", choose the workspace, "Create and Install"), close the install page
