@@ -1,5 +1,6 @@
 import { Cli, z, type Plugin } from '@alleneubank/incur'
 
+import { isTimeout, withDeadline } from './deadline.js'
 import { commandError, type Outcome } from './errors.js'
 import { withMessageLink } from './message-links.js'
 import { familySummary, slackMethod, slackMethods, type SlackMethod } from './methods.js'
@@ -192,21 +193,12 @@ async function exchange(
   deps: WebApiDeps,
 ): Promise<Outcome<string>> {
   const timeoutMs = deps.timeoutMs ?? SLACK_API_TIMEOUT_MS
-  const deadline = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  // The deadline rejects on its own: fetch's abort listener can be garbage-
-  // collected while a body read is pending, and then aborting stops nothing.
-  const expired = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const reason = new DOMException('Slack Web API timed out', 'TimeoutError')
-      deadline.abort(reason)
-      reject(reason)
-    }, timeoutMs)
-  })
   try {
-    return await Promise.race([transfer(method, body, token, deps, deadline.signal), expired])
+    return await withDeadline(`Slack Web API ${method.name}`, timeoutMs, (signal) =>
+      transfer(method, body, token, deps, signal),
+    )
   } catch (error) {
-    const timedOut = error instanceof Error && error.name === 'TimeoutError'
+    const timedOut = isTimeout(error)
     return uncertain(
       method,
       timedOut ? 'TIMEOUT' : 'NETWORK',
@@ -214,8 +206,6 @@ async function exchange(
         ? `Slack Web API timed out after ${timeoutMs}ms`
         : `Slack Web API request failed: ${error instanceof Error ? error.message : String(error)}`,
     )
-  } finally {
-    clearTimeout(timer)
   }
 }
 

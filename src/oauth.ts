@@ -2,6 +2,7 @@ import { createHash, randomBytes as nodeRandomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { withDeadline } from './deadline.js'
 import { SOURCE_URL } from './version.js'
 
 export const OAUTH_AUTHORIZE_URL: string = 'https://slack.com/oauth/v2_user/authorize'
@@ -439,20 +440,29 @@ export async function listenForLoopbackCode(input: {
 }
 
 async function requestToken(fetch: Fetch, body: URLSearchParams): Promise<OauthToken> {
-  const response = await fetch(
-    new Request(OAUTH_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-      body,
-      signal: AbortSignal.timeout(OAUTH_HTTP_TIMEOUT_MS),
-    }),
+  const { status, text } = await withDeadline(
+    'Slack OAuth token request',
+    OAUTH_HTTP_TIMEOUT_MS,
+    async (signal) => {
+      const response = await fetch(
+        new Request(OAUTH_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            accept: 'application/json',
+          },
+          body,
+          signal,
+        }),
+      )
+      return { status: response.status, text: await response.text() }
+    },
   )
-  const text = await response.text()
   let parsed: unknown
   try {
     parsed = JSON.parse(text) as unknown
   } catch {
-    throw new Error(`Slack OAuth token endpoint returned HTTP ${response.status}`)
+    throw new Error(`Slack OAuth token endpoint returned HTTP ${status}`)
   }
   if (!isRecord(parsed) || parsed['ok'] !== true) {
     const code =
