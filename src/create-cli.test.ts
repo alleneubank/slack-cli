@@ -148,6 +148,21 @@ function rotatingStore(teams: CredentialsFile['teams'], currentTeamId = 'T1'): C
   return { version: 1, currentTeamId, teams }
 }
 
+function recorder() {
+  const requests: { method: string; body: URLSearchParams }[] = []
+  const target = cli({
+    ...withToken(),
+    fetch: async (request) => {
+      const method = new URL(request.url).pathname.replace('/api/', '')
+      requests.push({ method, body: new URLSearchParams(await request.text()) })
+      return Response.json({ ok: true })
+    },
+  })
+  const sent = () =>
+    requests.map(({ method, body }) => [method, Object.fromEntries(body.entries())])
+  return { target, sent }
+}
+
 describe('Slack Web API methods', () => {
   test('sends only declared arguments, form-encoded, and prints Slack JSON unchanged', async () => {
     const body = { ok: true, messages: [{ ts: '1.0', text: 'hi' }], has_more: false }
@@ -224,21 +239,6 @@ describe('Slack Web API methods', () => {
   describe('message links', () => {
     const messageLink = 'https://example.slack.com/archives/C0123456789/p1789757627925439'
     const replyLink = `${messageLink}?thread_ts=1789757600.000100&cid=C0123456789`
-
-    function recorder() {
-      const requests: { method: string; body: URLSearchParams }[] = []
-      const target = cli({
-        ...withToken(),
-        fetch: async (request) => {
-          const method = new URL(request.url).pathname.replace('/api/', '')
-          requests.push({ method, body: new URLSearchParams(await request.text()) })
-          return Response.json({ ok: true })
-        },
-      })
-      const sent = () =>
-        requests.map(({ method, body }) => [method, Object.fromEntries(body.entries())])
-      return { target, sent }
-    }
 
     test('a link names the channel and message in place of the two ids', async () => {
       const { target, sent } = recorder()

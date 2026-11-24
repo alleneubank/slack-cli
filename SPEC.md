@@ -89,7 +89,7 @@ output.
   send Unix seconds, so agents need no shell date arithmetic. Overlay
   positionals replace their flags. Where the positionals are `<channel> <ts>`
   (`chat delete`, `chat getPermalink`, `chat update`, `conversations
-replies`), a single Slack message link
+  replies`), a single Slack message link
   (`https://<workspace>.slack.com/archives/<channel>/p<ts digits>`) may stand
   for both; `conversations replies` takes the link's `thread_ts` query
   parameter as the thread when present. `conversations history` also takes a
@@ -136,7 +136,7 @@ replies`), a single Slack message link
 - **REQ-FILES-001** `slack files download <target>` takes a file id (`F…`) or
   a message link. A link reads that message (a reply through its thread's
   `conversations.replies`) and downloads every file on it, or only `--file
-<id>`; a file object marked `file_access: "check_file_info"` (Slack Connect)
+  <id>`; a file object marked `file_access: "check_file_info"` (Slack Connect)
   is completed with `files.info`. It fetches `url_private_download` (else
   `url_private`) with the token as `Authorization: Bearer`, following
   redirects by hand and sending the token only to `https://slack.com` and
@@ -220,7 +220,7 @@ replies`), a single Slack message link
   another workspace on Slack's consent page, or an override named another
   app), login prints that the workspace moved from one app to the other. `slack logout` removes the selected workspace and, when others remain,
   makes the lowest remaining team id current and reports it. `slack logout
---all` removes every workspace. A legacy single-object credentials file is read as one
+  --all` removes every workspace. A legacy single-object credentials file is read as one
   team and rewritten in the versioned format on the next write. Writes are
   atomic (temp file, then rename) at mode 0600.
 - **REQ-AUTH-005** A stored workspace with a refresh token is refreshed before a
@@ -236,7 +236,7 @@ replies`), a single Slack message link
   token expiry, and with `--scopes` the scopes) and whether `SLACK_TOKEN` overrides them, without printing tokens.
   Scopes are opt-in because they are most of the output (about 60 per
   workspace) and a `missing_scope` error already names the scope it needs. `slack workspaces use
-<team>` makes a stored workspace current.
+  <team>` makes a stored workspace current.
 - **REQ-AUTH-007** `slack app create [--write] [--paste]` reads an app
   configuration token from a hidden terminal prompt, or from stdin when stdin
   is not a terminal, and never from argv or the environment. Empty input is
@@ -250,7 +250,7 @@ replies`), a single Slack message link
   and exits 1; `invalid_manifest` lists each problem with its pointer. When
   Slack's answer is lost or unreadable, the app may exist, so the error says
   to check https://api.slack.com/apps and finish with `slack login
---client-id` instead of creating another. When sign-in fails after the app
+  --client-id` instead of creating another. When sign-in fails after the app
   exists, the error names the app and its CTA is `slack login --client-id <id>`
   with the `--write` and `--paste` that were given. Piped stdin must end
   within the login timeout; Ctrl-D ends the hidden prompt. It accepts
