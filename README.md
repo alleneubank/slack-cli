@@ -27,6 +27,16 @@ npm install --global @alleneubank/slack-cli
 slack --help
 ```
 
+Each [GitHub release](https://github.com/alleneubank/slack-cli/releases) also
+carries standalone executables that need no Node.js, for macOS (arm64, x64)
+and Linux (x64, arm64): `slack-<version>-<os>-<arch>.tar.gz`, with
+`SHA256SUMS` and a build provenance attestation
+(`gh attestation verify <archive> --repo alleneubank/slack-cli`). Unpack it
+and put `bin/slack` on your `PATH`, keeping the archive's other files beside
+`bin/`: `slack skills add` and `slack app create` read them. The executables
+are built with Bun and are not notarized, so on macOS a copy downloaded
+through a browser needs `xattr -d com.apple.quarantine bin/slack`.
+
 ## Sign in
 
 ```sh
@@ -256,6 +266,7 @@ nub run knip
 nub run jscpd
 nub run build
 node dist/cli.js --help
+scripts/compile-binaries.sh dist-bin darwin-arm64   # needs Bun, version in .bun-version
 ```
 
 Unit tests inject `fetch` and never call Slack. Behavior that depends on

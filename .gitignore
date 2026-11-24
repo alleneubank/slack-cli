@@ -46,3 +46,4 @@ CLAUDE.local.md
 # Eval results and workspace-specific tasks (contain private Slack content)
 evals/ab/results/
 evals/ab/tasks/*.local.json
+dist-bin
