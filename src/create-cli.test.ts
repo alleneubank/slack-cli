@@ -1441,7 +1441,29 @@ describe('app create', () => {
       ) as unknown,
     })
 
-    for (const result of [expired, invalid, lost])
+    // Slack answered 200 and the body was cut off: the app most likely exists.
+    const cut = await run(
+      cli({
+        configurationToken,
+        fetch: () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode('{"ok":true,"app_id":'))
+                controller.error(new TypeError('terminated'))
+              },
+            }),
+          ),
+      }),
+      ['app', 'create', '--json'],
+    )
+    expect(cut.exitCode).toBe(1)
+    expect(cut.json()).toMatchObject({
+      code: 'NETWORK',
+      message: expect.stringContaining('finish with slack login --client-id') as unknown,
+    })
+
+    for (const result of [expired, invalid, lost, cut])
       expect(result.output).not.toContain(configurationToken)
   })
 })
