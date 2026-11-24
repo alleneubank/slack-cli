@@ -224,13 +224,33 @@ export type OauthToken = {
   scopes?: string[] | undefined
 }
 
+/** A receiver that is ready for the authorization code; `code` waits for it. */
+export type CodeReceiver = { code: () => Promise<string> }
+
+/**
+ * Starts receiving the code for `state`. It resolves once the receiver is
+ * ready (the loopback listener is bound), so the URL is shown and the browser
+ * opens only when the redirect can be delivered.
+ */
+export type ReceiveCode = (input: { state: string; timeoutMs: number }) => Promise<CodeReceiver>
+
+/** The loopback port is taken, most likely by another `slack login` waiting for consent. */
+export class LoopbackPortInUseError extends Error {
+  readonly port: number
+  constructor(port: number, options: { cause: unknown }) {
+    super(`Port ${port} is already in use`, options)
+    this.name = 'LoopbackPortInUseError'
+    this.port = port
+  }
+}
+
 export type AuthorizeSlackUserOptions = {
   clientId: string
   fetch: Fetch
   openUrl: (url: string) => Promise<void>
-  /** Called with the authorize URL before the browser opens. */
+  /** Called with the authorize URL once the receiver is ready, before the browser opens. */
   onAuthorizeUrl?: (url: string) => void
-  waitForCode: (input: { state: string; timeoutMs: number }) => Promise<{ code: string }>
+  receiveCode: ReceiveCode
   randomBytes?: (size: number) => Uint8Array
   timeoutMs?: number | undefined
   scope?: string | undefined
@@ -261,16 +281,16 @@ export async function authorizeSlackUser(
   if (options.team !== undefined) authorizeUrl.searchParams.set('team', options.team)
 
   const authorize = authorizeUrl.toString()
-  // Announce first so a paste prompt follows the URL; wait before the browser
-  // opens so the loopback listener is up when the redirect arrives.
+  // The URL is shown and the browser opened only once the receiver is ready,
+  // so the redirect has somewhere to go; a paste prompt follows the URL.
+  const receiver = await options.receiveCode({ state, timeoutMs })
   options.onAuthorizeUrl?.(authorize)
-  const codePromise = options.waitForCode({ state, timeoutMs })
   try {
     await options.openUrl(authorize)
   } catch {
     // Opening a browser is optional; the printed URL is enough to finish login.
   }
-  const { code } = await codePromise
+  const code = await receiver.code()
   const issued = await requestToken(
     options.fetch,
     new URLSearchParams({
@@ -314,30 +334,46 @@ export function parsePastedCode(pasted: string): string {
   return code
 }
 
-export async function waitForLoopbackCode(input: {
+/**
+ * Binds the loopback listener and resolves once it is listening; the code
+ * arrives through the returned receiver. A taken port rejects with
+ * `LoopbackPortInUseError` before anything else happens.
+ */
+export async function listenForLoopbackCode(input: {
   state: string
   timeoutMs: number
   port?: number | undefined
   path?: string | undefined
-}): Promise<{ code: string }> {
+}): Promise<CodeReceiver> {
   const port = input.port ?? OAUTH_LOOPBACK_PORT
   const path = input.path ?? OAUTH_LOOPBACK_PATH
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const server = createServer((req, res) => {
-      void handleCallback(req, res)
+  const server = createServer()
+  await new Promise<void>((resolve, reject) => {
+    const onBindError = (error: NodeJS.ErrnoException) => {
+      reject(
+        error.code === 'EADDRINUSE' ? new LoopbackPortInUseError(port, { cause: error }) : error,
+      )
+    }
+    server.once('error', onBindError)
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', onBindError)
+      resolve()
     })
+  })
 
-    const finish = (error: Error | undefined, code?: string) => {
+  // Requests are handled from a later event-loop turn, so none arrives before this runs.
+  const code = new Promise<string>((resolve, reject) => {
+    let settled = false
+    const finish = (error: Error | undefined, received?: string) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       server.close()
-      if (error) reject(error)
-      else resolve({ code: code! })
+      if (error === undefined) resolve(received!)
+      else reject(error)
     }
 
-    const handleCallback = async (req: IncomingMessage, res: ServerResponse) => {
+    server.on('request', (req: IncomingMessage, res: ServerResponse) => {
       try {
         const host = req.headers.host ?? `127.0.0.1:${port}`
         const url = new URL(req.url ?? '/', `http://${host}`)
@@ -359,8 +395,8 @@ export async function waitForLoopbackCode(input: {
           return
         }
         const oauthError = url.searchParams.get('error')
-        const code = url.searchParams.get('code')
-        if (oauthError !== null || code === null || code.length === 0) {
+        const received = url.searchParams.get('code')
+        if (oauthError !== null || received === null || received.length === 0) {
           res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' })
           res.end(OAUTH_CALLBACK_FAILURE_HTML)
           finish(new Error(oauthError ?? 'OAuth callback missing code'))
@@ -368,23 +404,21 @@ export async function waitForLoopbackCode(input: {
         }
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
         res.end(OAUTH_CALLBACK_SUCCESS_HTML)
-        finish(undefined, code)
+        finish(undefined, received)
       } catch (error) {
         res.writeHead(500)
         res.end()
         finish(error instanceof Error ? error : new Error(String(error)))
       }
-    }
-
+    })
+    server.on('error', (error) => {
+      finish(error)
+    })
     const timer = setTimeout(() => {
       finish(new Error(`OAuth timed out after ${input.timeoutMs}ms`))
     }, input.timeoutMs)
-
-    server.on('error', (error) => {
-      finish(error instanceof Error ? error : new Error(String(error)))
-    })
-    server.listen(port, '127.0.0.1')
   })
+  return { code: () => code }
 }
 
 async function requestToken(fetch: Fetch, body: URLSearchParams): Promise<OauthToken> {

@@ -41,7 +41,8 @@ is no client secret and no server. Slack requires an HTTPS redirect for
 distributed apps, so it redirects to a static page,
 <https://alleneubank.github.io/slack-cli/callback/> (source in
 [`docs/callback/`](docs/callback/)), which hands the one-time code to the CLI's
-listener on `http://127.0.0.1:8912/callback`. With `--paste`, the page shows
+listener on `http://127.0.0.1:8912/callback`. One login can wait there at a
+time; a second fails with `LOGIN_IN_PROGRESS`. With `--paste`, the page shows
 the code and the CLI reads it from the terminal instead. The code is useless
 without the PKCE verifier, which never leaves your machine, and the token goes
 from Slack straight to your machine; the app's developers never receive it.
