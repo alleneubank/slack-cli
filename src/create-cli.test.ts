@@ -1532,7 +1532,7 @@ function slackApps(manifest: Record<string, unknown>) {
   return { calls, fetch, current: () => stored }
 }
 
-function noSlackCall(): Response {
+function noCallWithoutAppId(): Response {
   throw new Error('no Slack call without an app id')
 }
 
@@ -1640,13 +1640,13 @@ describe('app update', () => {
     const unrecorded = credentialsFile(
       rotatingStore({ T1: { accessToken, clientId: '1111111111.2222222222' } }),
     )
-    const onShared = await run(cli({ file: shared, fetch: noSlackCall }), [
+    const onShared = await run(cli({ file: shared, fetch: noCallWithoutAppId }), [
       'app',
       'update',
       '--json',
     ])
     expect(onShared.json()).toMatchObject({ code: 'NOT_OWN_APP' })
-    const onOwn = await run(cli({ file: unrecorded, fetch: noSlackCall }), [
+    const onOwn = await run(cli({ file: unrecorded, fetch: noCallWithoutAppId }), [
       'app',
       'update',
       '--json',
