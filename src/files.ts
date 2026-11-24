@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { createWriteStream, openAsBlob } from 'node:fs'
+import { openAsBlob } from 'node:fs'
 import { link as hardLink, open, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { Readable, Transform } from 'node:stream'
@@ -301,23 +301,27 @@ async function save(
     `.${path.basename(destination)}.${randomBytes(6).toString('hex')}.part`,
   )
   try {
-    const saved = await withDeadline(
-      `Downloading file ${file.id}`,
-      FILE_TRANSFER_TIMEOUT_MS,
-      async (signal): Promise<Outcome<void>> => {
-        const response = await fetchSlackFile(file, token, deps, signal)
-        if (!response.ok) return response
-        const body = response.value.body
-        if (body === null) return failure('BAD_RESPONSE', `Slack sent no body for file ${file.id}`)
-        await pipeline(
-          Readable.fromWeb(body),
-          boundedBytes(FILE_BYTES_MAX),
-          createWriteStream(temporary, { flags: 'wx' }),
-          { signal },
-        )
-        return { ok: true, value: undefined }
-      },
-    )
+    // Opened before the deadline starts, so the cleanup below always finds the
+    // file; a write stream still opening after the deadline could recreate it.
+    const out = (await open(temporary, 'wx')).createWriteStream()
+    let saved: Outcome<void>
+    try {
+      saved = await withDeadline(
+        `Downloading file ${file.id}`,
+        FILE_TRANSFER_TIMEOUT_MS,
+        async (signal): Promise<Outcome<void>> => {
+          const response = await fetchSlackFile(file, token, deps, signal)
+          if (!response.ok) return response
+          const body = response.value.body
+          if (body === null)
+            return failure('BAD_RESPONSE', `Slack sent no body for file ${file.id}`)
+          await pipeline(Readable.fromWeb(body), boundedBytes(FILE_BYTES_MAX), out, { signal })
+          return { ok: true, value: undefined }
+        },
+      )
+    } finally {
+      out.destroy()
+    }
     if (!saved.ok) return saved
     if (force) await rename(temporary, destination)
     else await hardLink(temporary, destination)
