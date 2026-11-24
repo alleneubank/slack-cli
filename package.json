@@ -57,15 +57,15 @@
     "@alleneubank/incur": "^0.9.0"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1",
-    "@types/node": "^24.5.2",
-    "jscpd": "^5.0.12",
-    "knip": "^6.29.0",
-    "oxfmt": "^0.60.0",
-    "oxlint": "^1.75.0",
-    "tsdown": "^0.22.14",
+    "@changesets/cli": "^3.0.3",
+    "@types/node": "^24.19.2",
+    "jscpd": "^5.4.3",
+    "knip": "^6.47.0",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "tsdown": "^0.23.7",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.1"
+    "vitest": "^5.1.1"
   },
   "engines": {
     "node": ">=22"
