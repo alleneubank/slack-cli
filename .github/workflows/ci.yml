@@ -75,8 +75,15 @@ jobs:
       - run: nub run jscpd
 
   binary:
-    name: Compiled Binary
-    runs-on: ubuntu-latest
+    name: Compiled Binary (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, runner: ubuntu-latest }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm }
+          - { target: darwin-arm64, runner: macos-latest }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: nubjs/setup-nub@v0
@@ -84,10 +91,12 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: nub ci
-      - run: scripts/compile-binaries.sh "$RUNNER_TEMP/binaries" linux-x64
+      - run: scripts/compile-binaries.sh "$RUNNER_TEMP/binaries" ${{ matrix.target }}
       - name: Smoke-test the archive
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           version=$(node -p "require('./package.json').version")
-          tar -xzf "$RUNNER_TEMP/binaries/slack-$version-linux-x64.tar.gz" -C "$RUNNER_TEMP"
-          scripts/smoke-binary.sh "$RUNNER_TEMP/slack-$version-linux-x64/bin/slack" "$version"
+          tar -xzf "$RUNNER_TEMP/binaries/slack-$version-$TARGET.tar.gz" -C "$RUNNER_TEMP"
+          scripts/smoke-binary.sh "$RUNNER_TEMP/slack-$version-$TARGET/bin/slack" "$version"

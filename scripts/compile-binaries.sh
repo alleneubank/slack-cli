@@ -47,5 +47,9 @@ for target in "${targets[@]}"; do
   archives+=("$name.tar.gz")
 done
 
-(cd "$out" && shasum -a 256 "${archives[@]}" > SHA256SUMS)
+if command -v sha256sum >/dev/null; then
+  (cd "$out" && sha256sum "${archives[@]}" > SHA256SUMS)
+else
+  (cd "$out" && shasum -a 256 "${archives[@]}" > SHA256SUMS)
+fi
 echo "Wrote ${archives[*]} and SHA256SUMS to $out"

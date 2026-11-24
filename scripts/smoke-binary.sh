@@ -32,5 +32,8 @@ answer=$(SLACK_TOKEN=xoxp-0-not-a-token "$slack" auth test --json 2>&1 || true)
 answer=$(echo 'xoxe.xoxp-0-not-a-token' | "$slack" app create --json 2>&1 || true)
 [[ $answer == *'"code":"invalid_auth"'* ]] ||
   fail "app create with a fake configuration token did not reach Slack as invalid_auth: $answer"
-"$slack" skills add --json | grep -q '"skills"' || fail 'skills add did not find the bundled skill'
+# Without the bundled skill, incur would sync one generated from the CLI description.
+"$slack" skills add --json > /dev/null
+grep -q 'Use when reading or acting in a Slack workspace' "$HOME/.agents/skills/slack/SKILL.md" ||
+  fail 'skills add did not install the bundled skill'
 echo "smoke test passed: $slack $version"
