@@ -144,6 +144,14 @@ export function appCli(deps: AppDeps): Cli.Cli {
           slack,
         )
         if (!exported.ok) return context.error(commandError(exported.error))
+        // Output redaction replaced values in the export; writing it back would store them.
+        if (exported.value['redacted'] !== undefined)
+          return context.error(
+            commandError({
+              code: 'MANIFEST_HAS_SECRETS',
+              message: `App ${appId.value}'s manifest has values named like tokens or secrets, which this CLI does not read back; add the scopes at https://api.slack.com/apps/${appId.value}/oauth instead`,
+            }),
+          )
         const current = exportedSchema.safeParse(exported.value)
         if (!current.success)
           return context.error(
