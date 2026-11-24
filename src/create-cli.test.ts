@@ -1410,7 +1410,10 @@ describe('app create', () => {
       'If this workspace also signed in through the shared app, it stays authorized there; remove it under Manage apps in Slack.\n',
     ])
     const stored = readFileSync(file, 'utf8')
-    expect(readCredentials(file).teams['T1']?.clientId).toBe('1111111111.2222222222')
+    expect(readCredentials(file).teams['T1']).toMatchObject({
+      clientId: '1111111111.2222222222',
+      appId: 'A0OWNAPP',
+    })
     for (const secret of [configurationToken, ...Object.values(appSecrets)]) {
       expect(result.output).not.toContain(secret)
       expect(terminal.join('')).not.toContain(secret)
@@ -1508,5 +1511,138 @@ describe('app create', () => {
 
     for (const result of [expired, invalid, lost, cut])
       expect(result.output).not.toContain(configurationToken)
+  })
+})
+
+/** Slack's side: apps.manifest.export answers `manifest`, apps.manifest.update stores it. */
+function slackApps(manifest: Record<string, unknown>) {
+  const calls: { method: string; auth: string | null; body: URLSearchParams }[] = []
+  let stored = manifest
+  const fetch = async (request: Request) => {
+    const method = new URL(request.url).pathname.slice(5)
+    const body = new URLSearchParams(await request.text())
+    calls.push({ method, auth: request.headers.get('authorization'), body })
+    if (method === 'apps.manifest.export') return Response.json({ ok: true, manifest: stored })
+    if (method === 'apps.manifest.update') {
+      stored = JSON.parse(body.get('manifest')!) as Record<string, unknown>
+      return Response.json({ ok: true, app_id: body.get('app_id'), permissions_updated: true })
+    }
+    throw new Error(`unexpected ${method}`)
+  }
+  return { calls, fetch, current: () => stored }
+}
+
+function noSlackCall(): Response {
+  throw new Error('no Slack call without an app id')
+}
+
+function issueToken(): Response {
+  return Response.json({
+    ok: true,
+    access_token: 'xoxp-new',
+    team: { id: 'T1' },
+    authed_user: { id: 'U1' },
+  })
+}
+
+describe('app update', () => {
+  const configurationToken = 'xoxe.xoxp-1-configuration-not-a-secret'
+  const bundled = JSON.parse(
+    readFileSync(new URL('../slack-app-manifest.json', import.meta.url), 'utf8'),
+  ) as { oauth_config: { scopes: { user: string[] }; redirect_urls: string[] } }
+  const ownApp = { accessToken, clientId: '1111111111.2222222222', appId: 'A0OWNAPP' }
+
+  test('adds the missing user scopes and keeps the rest of the app; a second run changes nothing', async () => {
+    const file = credentialsFile(rotatingStore({ T1: ownApp }))
+    const behind = {
+      display_information: { name: 'Renamed by the admin' },
+      oauth_config: {
+        redirect_urls: bundled.oauth_config.redirect_urls,
+        pkce_enabled: true,
+        scopes: {
+          user: [
+            ...bundled.oauth_config.scopes.user.filter((scope) => !scope.startsWith('lists:')),
+            'admin',
+          ],
+          bot: ['chat:write'],
+        },
+      },
+      settings: { org_deploy_enabled: false },
+    }
+    const slack = slackApps(behind)
+    const terminal: string[] = []
+    const oauth = consentHost(async () => 'unused', terminal)
+    const first = await run(cli({ file, configurationToken, fetch: slack.fetch, oauth }), [
+      'app',
+      'update',
+      '--json',
+    ])
+    expect(first.exitCode).toBeUndefined()
+    expect(first.json()).toEqual({
+      ok: true,
+      appId: 'A0OWNAPP',
+      changed: true,
+      addedScopes: ['lists:read', 'lists:write'],
+    })
+    expect(terminal).toEqual([
+      'Added 2 user scopes to app A0OWNAPP: lists:read, lists:write\nRun slack login --write to grant them.\n',
+    ])
+    expect(slack.calls.map((call) => [call.method, call.auth, call.body.get('app_id')])).toEqual([
+      ['apps.manifest.export', `Bearer ${configurationToken}`, 'A0OWNAPP'],
+      ['apps.manifest.update', `Bearer ${configurationToken}`, 'A0OWNAPP'],
+    ])
+    expect(slack.current()).toMatchObject({
+      display_information: { name: 'Renamed by the admin' },
+      settings: { org_deploy_enabled: false },
+      oauth_config: { scopes: { bot: ['chat:write'] } },
+    })
+    const scopes = (slack.current() as typeof behind).oauth_config.scopes.user
+    expect(scopes.toSorted()).toEqual([...bundled.oauth_config.scopes.user, 'admin'].toSorted())
+
+    const second = await run(cli({ file, configurationToken, fetch: slack.fetch, oauth }), [
+      'app',
+      'update',
+      '--json',
+    ])
+    expect(second.json()).toEqual({ ok: true, appId: 'A0OWNAPP', changed: false, addedScopes: [] })
+    expect(slack.calls.map((call) => call.method)).toEqual([
+      'apps.manifest.export',
+      'apps.manifest.update',
+      'apps.manifest.export',
+    ])
+    expect(first.output + second.output).not.toContain(configurationToken)
+  })
+
+  test('without a stored app id it names what to pass, before reading a token', async () => {
+    const shared = credentialsFile(
+      rotatingStore({ T1: { accessToken, clientId: SLACK_OAUTH_CLIENT_ID } }),
+    )
+    const unrecorded = credentialsFile(
+      rotatingStore({ T1: { accessToken, clientId: '1111111111.2222222222' } }),
+    )
+    const onShared = await run(cli({ file: shared, fetch: noSlackCall }), [
+      'app',
+      'update',
+      '--json',
+    ])
+    expect(onShared.json()).toMatchObject({ code: 'NOT_OWN_APP' })
+    const onOwn = await run(cli({ file: unrecorded, fetch: noSlackCall }), [
+      'app',
+      'update',
+      '--json',
+    ])
+    expect(onOwn.json()).toMatchObject({
+      code: 'APP_ID_REQUIRED',
+      message: expect.stringContaining('pass --app') as unknown,
+    })
+  })
+
+  test('signing in through another app forgets the stored app id', async () => {
+    const file = credentialsFile(rotatingStore({ T1: ownApp }))
+    const oauth = consentHost(async () => 'auth-code-not-a-secret')
+    await run(cli({ file, fetch: issueToken, oauth }), ['login', '--json'])
+    expect(readCredentials(file).teams['T1']).toMatchObject({ appId: 'A0OWNAPP' })
+    await run(cli({ file, fetch: issueToken, oauth }), ['login', '--client-id', 'shared', '--json'])
+    expect(readCredentials(file).teams['T1']?.appId).toBeUndefined()
   })
 })

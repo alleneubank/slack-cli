@@ -118,6 +118,11 @@ describe('HTTPS redirect relay', () => {
       expect(relayAction(search)).toEqual({ kind: 'install' })
   })
 
+  test("Slack's page for scopes the app lacks leads to slack app update", () => {
+    // Slack links back with only the error; there is no state to act on.
+    expect(relayAction('?error=invalid_scope_requested')).toEqual({ kind: 'outdated' })
+  })
+
   test('a pasted code is trimmed; anything else is rejected without echoing it', () => {
     expect(parsePastedCode('  12085301315143.1234.abcdef \n')).toBe('12085301315143.1234.abcdef')
     for (const pasted of ['', 'not a code', 'https://example.com/?code=1', 'x'.repeat(600)]) {

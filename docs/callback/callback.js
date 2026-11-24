@@ -13,7 +13,8 @@ if (action.kind === 'forward') {
   else if (action.kind === 'failed') {
     document.getElementById('error').textContent = action.error
     show('failed')
-  } else show('install')
+  } else if (action.kind === 'outdated') show('outdated')
+  else show('install')
 }
 
 /** @param {string} id */

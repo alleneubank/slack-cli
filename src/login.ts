@@ -149,7 +149,13 @@ function originNote(origin: LoginTarget['origin'], file: CredentialsFile): strin
 export async function signIn(
   deps: LoginDeps,
   target: LoginTarget,
-  options: { write: boolean; paste: boolean; announce: string },
+  options: {
+    write: boolean
+    paste: boolean
+    announce: string
+    /** App id of `target`'s app, known when `slack app create` just made it. */
+    appId?: string | undefined
+  },
 ): Promise<Outcome<SignedIn>> {
   const { clientId, team: teamHint } = target
   const oauth = deps.oauth ?? defaultOauthHost()
@@ -200,12 +206,18 @@ export async function signIn(
   try {
     previousClientId = await deps.store.withLock(async (locked) => {
       const file = await locked.read()
+      const previous = file.teams[issued.teamId]
+      // An app id belongs to one client id; signing in through another app drops it.
+      const appId = options.appId ?? (previous?.clientId === clientId ? previous.appId : undefined)
       await locked.write({
         version: 1,
         currentTeamId: issued.teamId,
-        teams: { ...file.teams, [issued.teamId]: team },
+        teams: {
+          ...file.teams,
+          [issued.teamId]: { ...team, ...(appId === undefined ? undefined : { appId }) },
+        },
       })
-      return file.teams[issued.teamId]?.clientId
+      return previous?.clientId
     })
   } catch (error) {
     return { ok: false, error: credentialsFailure(error) }

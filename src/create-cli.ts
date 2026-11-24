@@ -187,6 +187,7 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
     .command(
       appCli({
         ...loginDeps,
+        env,
         origin: deps.apiOrigin ?? SLACK_API_ORIGIN,
         manifestPath: path.join(packageRoot, 'slack-app-manifest.json'),
         readConfigurationToken: deps.readConfigurationToken,

@@ -18,6 +18,7 @@ const oauthValue = /^[A-Za-z0-9._-]{1,512}$/
  * @typedef {{ kind: 'forward', url: string }
  *   | { kind: 'paste', code: string }
  *   | { kind: 'failed', error: string }
+ *   | { kind: 'outdated' }
  *   | { kind: 'install' }} RelayAction
  */
 
@@ -32,6 +33,9 @@ export function relayAction(search) {
   const state = params.get('state') ?? ''
   const code = params.get('code')
   const error = params.get('error')
+  // Slack refuses scopes the app lacks on its own page, whose link back here
+  // carries only this error, no state: the CLI never hears of it.
+  if (error === 'invalid_scope_requested') return { kind: 'outdated' }
   const delivery = loopbackState.test(state) ? 'loopback' : pasteState.test(state) ? 'paste' : null
   if (delivery === null) return { kind: 'install' }
   if (code !== null && !oauthValue.test(code)) return { kind: 'failed', error: 'invalid_code' }

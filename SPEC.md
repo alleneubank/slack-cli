@@ -245,7 +245,23 @@ replies`), a single Slack message link
   exists, the error names the app and its CTA is `slack login --client-id <id>`
   with the `--write` and `--paste` that were given. Piped stdin must end
   within the login timeout; Ctrl-D ends the hidden prompt. It accepts
-  `--dry-run`, which reads no token and calls nothing.
+  `--dry-run`, which reads no token and calls nothing. The created app's
+  `appId` is stored with the workspace and shown by `slack workspaces list`;
+  a later login through another client id drops it.
+- **REQ-AUTH-008** `slack app update [--app <A…>]` updates the app named by
+  `--app`, else the `appId` stored for the selected workspace. Without one it
+  is `NOT_OWN_APP` for a workspace on the shared app and `APP_ID_REQUIRED`
+  otherwise, before reading a token. It reads a configuration token as
+  REQ-AUTH-007 does, calls `apps.manifest.export`, and when the app lacks a
+  bundled user scope, the bundled redirect, or the bundled `pkce_enabled`,
+  calls `apps.manifest.update` with the exported manifest plus those; nothing
+  else in the manifest changes, and no scope is removed. It reports `appId`,
+  `changed`, and `addedScopes`, and names the `slack login` that grants them.
+  When the app already matches it makes no update call (`changed: false`).
+  Slack refuses scopes an app lacks on its own page, which links back to the
+  redirect page with only `error=invalid_scope_requested`; the redirect page
+  then says to run `slack app update`, and login's timeout error says the
+  same.
 - **REQ-TEST-001** Unit tests assert observable CLI output against injected
   OAuth and Web API `fetch` for cases the live workspace cannot produce on
   demand (HTTP errors, rate limits, oversize bodies, secret redaction,

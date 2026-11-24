@@ -28,6 +28,7 @@ const workspaceSchema = z.object({
     .optional()
     .describe('Client id of the Slack app the workspace signed in through; slack login reuses it'),
   app: slackAppSchema.optional(),
+  appId: z.string().optional().describe('App id of the own app, when slack app create made it'),
   rotating: z.boolean().describe('The token expires and is refreshed automatically'),
   expiresAt: z.string().optional().describe('When the stored access token expires (ISO 8601)'),
   scopes: z
@@ -108,6 +109,7 @@ function describe(teamId: string, team: TeamCredentials, current: boolean, inclu
     ...(team.clientId === undefined
       ? undefined
       : { clientId: team.clientId, app: slackApp(team.clientId) }),
+    ...(team.appId === undefined ? undefined : { appId: team.appId }),
     rotating: team.refreshToken !== undefined,
     ...(team.expiresAt === undefined
       ? undefined

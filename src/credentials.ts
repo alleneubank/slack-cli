@@ -22,6 +22,8 @@ export type TeamCredentials = {
   expiresAt?: number | undefined
   /** OAuth client that issued the token; refresh must use the same one. */
   clientId?: string | undefined
+  /** App id of `clientId`'s app, when `slack app create` made it; `slack app update` uses it. */
+  appId?: string | undefined
   userId?: string | undefined
   teamName?: string | undefined
   /** User scopes Slack reported at the last login or refresh. */
@@ -46,6 +48,7 @@ const teamSchema: z.ZodType<TeamCredentials> = z.object({
   refreshToken: z.string().min(1).optional(),
   expiresAt: z.number().int().optional(),
   clientId: z.string().min(1).optional(),
+  appId: z.string().min(1).optional(),
   userId: z.string().min(1).optional(),
   teamName: z.string().min(1).optional(),
   scopes: z.array(z.string().min(1)).optional(),
