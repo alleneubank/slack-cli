@@ -360,7 +360,8 @@ output.
   `slack-<version>-<os>-<arch>.tar.gz` (with `bin/slack`,
   `slack-app-manifest.json`, `skills/`, LICENSE, README) plus `SHA256SUMS`
   and a build provenance attestation; `release.yml` builds and smoke-tests
-  them after npm has the version. They start in about 0.05 s against about
+  them after npm has the version, in a job with a read-only token, then
+  attests and uploads them from a job that installs nothing. They start in about 0.05 s against about
   0.8 s on Node. The version is built in; the manifest and skill are read
   beside `bin/` (`src/package-root.ts`). Bun is pinned in `.bun-version`.
 - The bin entry exports nothing, enforced by oxlint
