@@ -192,38 +192,19 @@ async function exchange(
   deps: WebApiDeps,
 ): Promise<Outcome<string>> {
   const timeoutMs = deps.timeoutMs ?? SLACK_API_TIMEOUT_MS
+  const deadline = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  // The deadline rejects on its own: fetch's abort listener can be garbage-
+  // collected while a body read is pending, and then aborting stops nothing.
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const reason = new DOMException('Slack Web API timed out', 'TimeoutError')
+      deadline.abort(reason)
+      reject(reason)
+    }, timeoutMs)
+  })
   try {
-    const response = await deps.fetch(
-      new Request(`${deps.origin}/api/${method.name}`, {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/x-www-form-urlencoded',
-        },
-        body,
-        signal: AbortSignal.timeout(timeoutMs),
-      }),
-    )
-    if (!response.ok) {
-      await response.body?.cancel()
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after')
-        return failure(
-          'RATE_LIMITED',
-          `Slack rate limited ${method.name}${retryAfter === null ? '' : `; retry after ${retryAfter}s`}`,
-          true,
-        )
-      }
-      const message = `Slack Web API returned HTTP ${response.status}`
-      return response.status >= 500
-        ? uncertain(method, 'HTTP_ERROR', message)
-        : failure('HTTP_ERROR', message)
-    }
-    const text = await readBounded(response, SLACK_RESPONSE_BYTES_MAX)
-    return text === undefined
-      ? unreadable(method, `Slack response exceeded ${SLACK_RESPONSE_BYTES_MAX} bytes`)
-      : { ok: true, value: text }
+    return await Promise.race([transfer(method, body, token, deps, deadline.signal), expired])
   } catch (error) {
     const timedOut = error instanceof Error && error.name === 'TimeoutError'
     return uncertain(
@@ -233,7 +214,50 @@ async function exchange(
         ? `Slack Web API timed out after ${timeoutMs}ms`
         : `Slack Web API request failed: ${error instanceof Error ? error.message : String(error)}`,
     )
+  } finally {
+    clearTimeout(timer)
   }
+}
+
+/** One HTTP request and its bounded body; transport errors are thrown to `exchange`. */
+async function transfer(
+  method: SlackMethod,
+  body: URLSearchParams,
+  token: string,
+  deps: WebApiDeps,
+  signal: AbortSignal,
+): Promise<Outcome<string>> {
+  const response = await deps.fetch(
+    new Request(`${deps.origin}/api/${method.name}`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body,
+      signal,
+    }),
+  )
+  if (!response.ok) {
+    await response.body?.cancel()
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after')
+      return failure(
+        'RATE_LIMITED',
+        `Slack rate limited ${method.name}${retryAfter === null ? '' : `; retry after ${retryAfter}s`}`,
+        true,
+      )
+    }
+    const message = `Slack Web API returned HTTP ${response.status}`
+    return response.status >= 500
+      ? uncertain(method, 'HTTP_ERROR', message)
+      : failure('HTTP_ERROR', message)
+  }
+  const text = await readBounded(response, SLACK_RESPONSE_BYTES_MAX)
+  return text === undefined
+    ? unreadable(method, `Slack response exceeded ${SLACK_RESPONSE_BYTES_MAX} bytes`)
+    : { ok: true, value: text }
 }
 
 async function post(
