@@ -49,6 +49,23 @@ export const TIMESTAMP_ARGUMENTS: ReadonlySet<string> = new Set([
  */
 export const REPLACED_METHODS: ReadonlySet<string> = new Set(['files.upload'])
 
+/**
+ * Methods whose result is a credential, for an app's own OAuth server or token
+ * rotation. They are not commands: output redaction would discard the result,
+ * and Slack consumes the code or token they take. `slack login` and
+ * `slack app create|update` cover what this CLI needs from them.
+ */
+export const CREDENTIAL_METHODS: ReadonlySet<string> = new Set([
+  'oauth.access',
+  'oauth.v2.access',
+  'oauth.v2.beginShortTokenRotation',
+  'oauth.v2.completeShortTokenRotation',
+  'oauth.v2.exchange',
+  'oauth.v2.user.access',
+  'openid.connect.token',
+  'tooling.tokens.rotate',
+])
+
 /** A hand-written command to use instead of the method, named first in its help. */
 export const INSTEAD_OF: Readonly<Record<string, string>> = {
   'apps.manifest.create':
