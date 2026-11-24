@@ -1613,6 +1613,26 @@ describe('app update', () => {
     expect(first.output + second.output).not.toContain(configurationToken)
   })
 
+  test('a manifest whose export came back redacted is not written back', async () => {
+    const file = credentialsFile(rotatingStore({ T1: ownApp }))
+    const slack = slackApps({ oauth_config: { scopes: { user: [] } } })
+    const redacted = async (request: Request) => {
+      const answer = await slack.fetch(request)
+      const body = (await answer.json()) as Record<string, unknown>
+      return Response.json({
+        ...body,
+        redacted: ['manifest.functions.f.input_parameters.api_token'],
+      })
+    }
+    const result = await run(cli({ file, configurationToken, fetch: redacted }), [
+      'app',
+      'update',
+      '--json',
+    ])
+    expect(result.json()).toMatchObject({ code: 'MANIFEST_HAS_SECRETS' })
+    expect(slack.calls.map((call) => call.method)).toEqual(['apps.manifest.export'])
+  })
+
   test('without a stored app id it names what to pass, before reading a token', async () => {
     const shared = credentialsFile(
       rotatingStore({ T1: { accessToken, clientId: SLACK_OAUTH_CLIENT_ID } }),
