@@ -88,12 +88,35 @@ app is not listed in the Slack Marketplace, so Slack
 [limits](https://docs.slack.dev/changelog/2025/05/29/rate-limit-changes-for-non-marketplace-apps/)
 its new installs: `conversations history` and `conversations replies` return
 at most 15 messages per call and allow 1 request per minute. An app created in
-your own workspace keeps the normal limits. To use an app you control, create
-one from [`slack-app-manifest.json`](slack-app-manifest.json) at
+your own workspace keeps the normal limits.
+
+`slack app create` makes that app and signs the workspace in through it.
+First generate an app configuration token for the workspace at
+[api.slack.com/apps](https://api.slack.com/apps) ("Your App Configuration
+Tokens" → "Generate Token"), then run:
+
+```sh
+slack app create --write                                   # paste at the hidden prompt
+op read 'op://Private/Slack config token/credential' | slack app create --write
+```
+
+The access token (`xoxe.xoxp-…`) goes in at the hidden prompt or on stdin,
+never as an argument. The command creates an app that is not distributed from
+the bundled [`slack-app-manifest.json`](slack-app-manifest.json) in the
+workspace chosen when the token was generated, then runs `slack login` through
+it. The configuration token
+is used for that one call and is never stored or printed; Slack's client
+secret and signing secret for the new app are discarded, since PKCE login
+needs neither. If sign-in fails after the app exists, the error names the
+`slack login --client-id` command that finishes it; running `slack app create`
+again would create a second app. An earlier authorization of the project's
+app in that workspace stays in place; remove it under Manage apps in Slack.
+
+To create the app by hand instead, paste the manifest at
 [api.slack.com/apps](https://api.slack.com/apps) ("Create New App" → "Paste a
-manifest", paste the file, choose the workspace, "Create and Install"). Close
-the install page Slack opens, copy the Client ID from the app's "Basic
-Information" page, and sign in through it:
+manifest", choose the workspace, "Create and Install"), close the install page
+Slack opens, copy the Client ID from the app's "Basic Information" page, and
+sign in through it:
 
 ```sh
 slack login --client-id 1234567890.1234567890 --write
