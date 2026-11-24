@@ -5,6 +5,7 @@
  */
 import { writeFile } from 'node:fs/promises'
 
+import { withDeadline } from './deadline.js'
 import {
   acceptsUserToken,
   parseIndex,
@@ -40,9 +41,11 @@ async function readMethod(entry: IndexEntry): Promise<CatalogMethod> {
 async function fetchText(url: string): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(fetchTimeoutMs) })
-      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
-      const text = await response.text()
+      const text = await withDeadline(url, fetchTimeoutMs, async (signal) => {
+        const response = await fetch(url, { signal })
+        if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
+        return response.text()
+      })
       if (text.length > pageLengthMax)
         throw new Error(`${url}: page exceeds ${pageLengthMax} characters`)
       return text

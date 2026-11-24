@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises'
 
 import { z, type Cli } from '@alleneubank/incur'
 
+import { isTimeout, withDeadline } from './deadline.js'
 import { commandError, type Outcome } from './errors.js'
 import { MESSAGE_LINK_SHAPE, parseMessageLink, type MessageLink } from './message-links.js'
 import { callSlackMethod, failure, isRecord, type SlackBody, type WebApiDeps } from './web-api.js'
@@ -295,20 +296,29 @@ async function save(
   if (!force && (await stat(destination).catch(() => undefined)) !== undefined)
     return fileExists(destination)
   if (file.size > FILE_BYTES_MAX) return tooLarge(file.id)
-  const response = await fetchSlackFile(file, token, deps)
-  if (!response.ok) return response
-  const body = response.value.body
-  if (body === null) return failure('BAD_RESPONSE', `Slack sent no body for file ${file.id}`)
   const temporary = path.join(
     path.dirname(destination),
     `.${path.basename(destination)}.${randomBytes(6).toString('hex')}.part`,
   )
   try {
-    await pipeline(
-      Readable.fromWeb(body),
-      boundedBytes(FILE_BYTES_MAX),
-      createWriteStream(temporary, { flags: 'wx' }),
+    const saved = await withDeadline(
+      `Downloading file ${file.id}`,
+      FILE_TRANSFER_TIMEOUT_MS,
+      async (signal): Promise<Outcome<void>> => {
+        const response = await fetchSlackFile(file, token, deps, signal)
+        if (!response.ok) return response
+        const body = response.value.body
+        if (body === null) return failure('BAD_RESPONSE', `Slack sent no body for file ${file.id}`)
+        await pipeline(
+          Readable.fromWeb(body),
+          boundedBytes(FILE_BYTES_MAX),
+          createWriteStream(temporary, { flags: 'wx' }),
+          { signal },
+        )
+        return { ok: true, value: undefined }
+      },
     )
+    if (!saved.ok) return saved
     if (force) await rename(temporary, destination)
     else await hardLink(temporary, destination)
     return { ok: true, value: undefined }
@@ -339,7 +349,7 @@ function boundedBytes(bytesMax: number): Transform {
 
 function transferFailure(error: unknown, id: string): Outcome<never> {
   if (error instanceof TooLargeError) return tooLarge(id)
-  if (error instanceof Error && error.name === 'TimeoutError')
+  if (isTimeout(error))
     return failure(
       'TIMEOUT',
       `Downloading file ${id} timed out after ${FILE_TRANSFER_TIMEOUT_MS}ms`,
@@ -372,8 +382,8 @@ async function fetchSlackFile(
   file: SlackFile,
   token: string,
   deps: WebApiDeps,
+  signal: AbortSignal,
 ): Promise<Outcome<Response>> {
-  const signal = AbortSignal.timeout(FILE_TRANSFER_TIMEOUT_MS)
   let url = URL.parse(file.url)
   for (let redirects = 0; redirects <= REDIRECTS_MAX; redirects += 1) {
     if (url === null || !isSlackHost(url))
@@ -537,16 +547,24 @@ async function uploadBytes(
   const url = URL.parse(uploadUrl)
   if (url === null || !isSlackHost(url))
     return failure('UNTRUSTED_URL', `Slack returned an upload URL outside https://*.slack.com`)
-  let response: Response
+  let status: number
   try {
-    response = await deps.fetch(
-      new Request(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/octet-stream' },
-        body: file.blob,
-        redirect: 'error',
-        signal: AbortSignal.timeout(FILE_TRANSFER_TIMEOUT_MS),
-      }),
+    status = await withDeadline(
+      `Uploading ${file.name}`,
+      FILE_TRANSFER_TIMEOUT_MS,
+      async (signal) => {
+        const response = await deps.fetch(
+          new Request(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/octet-stream' },
+            body: file.blob,
+            redirect: 'error',
+            signal,
+          }),
+        )
+        await response.body?.cancel()
+        return response.status
+      },
     )
   } catch (error) {
     if (
@@ -558,7 +576,7 @@ async function uploadBytes(
         'FILE_CHANGED',
         `${file.name} changed or became unreadable after it was checked`,
       )
-    const timedOut = error instanceof Error && error.name === 'TimeoutError'
+    const timedOut = isTimeout(error)
     // Nothing is shared until completeUploadExternal, so a failed transfer is safe to retry.
     return failure(
       timedOut ? 'TIMEOUT' : 'NETWORK',
@@ -566,12 +584,11 @@ async function uploadBytes(
       true,
     )
   }
-  await response.body?.cancel()
-  if (!response.ok)
+  if (status < 200 || status > 299)
     return failure(
       'HTTP_ERROR',
-      `Slack's upload host returned HTTP ${response.status} for ${file.name}`,
-      response.status === 429 || response.status >= 500,
+      `Slack's upload host returned HTTP ${status} for ${file.name}`,
+      status === 429 || status >= 500,
     )
   return { ok: true, value: id }
 }

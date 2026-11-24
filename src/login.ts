@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { z } from '@alleneubank/incur'
 
 import { credentialsFailure, nonEmpty } from './auth.js'
+import { withDeadline } from './deadline.js'
 import type { CredentialStore, CredentialsFile, TeamCredentials } from './credentials.js'
 import type { Outcome } from './errors.js'
 import {
@@ -256,9 +257,9 @@ function defaultOauthHost(): OauthHost {
     async readPastedCode({ timeoutMs }) {
       const terminal = createInterface({ input: process.stdin, output: process.stderr })
       try {
-        const pasted = await terminal.question('Paste the code shown in the browser: ', {
-          signal: AbortSignal.timeout(timeoutMs),
-        })
+        const pasted = await withDeadline('Reading the pasted code', timeoutMs, (signal) =>
+          terminal.question('Paste the code shown in the browser: ', { signal }),
+        )
         return parsePastedCode(pasted)
       } finally {
         terminal.close()

@@ -15,7 +15,15 @@
     "eqeqeq": "error",
     "no-var": "error",
     "prefer-const": "error",
-    "no-await-in-loop": "off"
+    "no-await-in-loop": "off",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "AbortSignal",
+        "property": "timeout",
+        "message": "Bound the call with withDeadline from src/deadline.ts: an AbortSignal.timeout signal can be garbage-collected while a body read is pending."
+      }
+    ]
   },
   "plugins": ["typescript", "import", "promise", "unicorn"],
   "ignorePatterns": ["node_modules", "**/dist", "build", "coverage", "*.d.ts"],

@@ -282,6 +282,9 @@ replies`), a single Slack message link
   revoked refresh token after a successful refresh.
 - An app configuration token, client secret, signing secret, or verification
   token is never stored, printed, or passed in argv or the environment.
+- Every HTTP call ends by its deadline, from the request through the last
+  body byte, even when the body stalls: Web API calls and OAuth token
+  requests after 30 s, file transfers after 10 minutes.
 
 ## Non-goals
 
@@ -379,6 +382,12 @@ replies`), a single Slack message link
   `client`, `identity:read`, `openid`, and `tokens.basic` (Slack refuses the
   request with them).
 
+- Deadlines are held by `withDeadline` (`src/deadline.ts`), which rejects on
+  its own timer as well as aborting the request: once headers arrive,
+  fetch's abort listener for an `AbortSignal.timeout` signal can be
+  garbage-collected, and a stalled body then outlives the timeout. The lint
+  configuration rejects `AbortSignal.timeout`.
+
 ## Risk tags
 
 - **Auth:** env/login token forwarded to Slack Web API; credential file format
@@ -396,6 +405,9 @@ replies`), a single Slack message link
 - REQ-FILES-001 / REQ-FILES-002 — `src/create-cli.test.ts` (off-Slack
   redirect never gets the token, sign-in page, Slack Connect stub) and a live
   upload into a thread and byte-exact download in the test workspace
+- Deadlines — `src/deadline.test.ts` (rejects at the deadline when the work
+  ignores the abort); a stalled-body probe under `node --expose-gc` for a Web
+  API call, a token refresh, and a file download
 - REQ-API-004 — `src/create-cli.test.ts` (unauthenticated method run;
   `--help` / `--version`)
 - REQ-API-008 — a pseudo-terminal run of `slack auth test` against a local
