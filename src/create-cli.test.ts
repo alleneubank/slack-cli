@@ -682,7 +682,7 @@ describe('workspaces', () => {
             opened.push(url)
           },
           async receiveCode() {
-            return { code: async () => 'auth-code-not-a-secret' }
+            return { code: async () => 'auth-code-not-a-secret', close() {} }
           },
         },
       }),
@@ -749,7 +749,7 @@ describe('workspaces', () => {
               opened.push(new URL(url))
             },
             async receiveCode() {
-              return { code: async () => 'auth-code-not-a-secret' }
+              return { code: async () => 'auth-code-not-a-secret', close() {} }
             },
             async readPastedCode() {
               throw new Error('not a paste login')
@@ -1333,7 +1333,7 @@ function consentHost(code: () => Promise<string>, terminal: string[] = []): Oaut
       if (!text.startsWith('Authorize Slack:')) terminal.push(text)
     },
     async openUrl() {},
-    receiveCode: async () => ({ code }),
+    receiveCode: async () => ({ code, close() {} }),
     async readPastedCode() {
       throw new Error('not a paste login')
     },
