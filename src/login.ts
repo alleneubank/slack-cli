@@ -166,7 +166,7 @@ export async function signIn(
       openUrl: oauth.openUrl,
       receiveCode:
         delivery === 'paste'
-          ? async (input) => ({ code: () => oauth.readPastedCode(input) })
+          ? async (input) => ({ code: () => oauth.readPastedCode(input), close: () => {} })
           : oauth.receiveCode,
       onAuthorizeUrl: (url) => {
         write(`Authorize Slack:\n${url}\n`)

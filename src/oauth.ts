@@ -224,8 +224,11 @@ export type OauthToken = {
   scopes?: string[] | undefined
 }
 
-/** A receiver that is ready for the authorization code; `code` waits for it. */
-export type CodeReceiver = { code: () => Promise<string> }
+/**
+ * A receiver that is ready for the authorization code. `code` waits for it;
+ * `close` releases what the receiver holds and is safe to call at any point.
+ */
+export type CodeReceiver = { code: () => Promise<string>; close: () => void }
 
 /**
  * Starts receiving the code for `state`. It resolves once the receiver is
@@ -284,13 +287,18 @@ export async function authorizeSlackUser(
   // The URL is shown and the browser opened only once the receiver is ready,
   // so the redirect has somewhere to go; a paste prompt follows the URL.
   const receiver = await options.receiveCode({ state, timeoutMs })
-  options.onAuthorizeUrl?.(authorize)
+  let code: string
   try {
-    await options.openUrl(authorize)
-  } catch {
-    // Opening a browser is optional; the printed URL is enough to finish login.
+    options.onAuthorizeUrl?.(authorize)
+    try {
+      await options.openUrl(authorize)
+    } catch {
+      // Opening a browser is optional; the printed URL is enough to finish login.
+    }
+    code = await receiver.code()
+  } finally {
+    receiver.close()
   }
-  const code = await receiver.code()
   const issued = await requestToken(
     options.fetch,
     new URLSearchParams({
@@ -361,6 +369,7 @@ export async function listenForLoopbackCode(input: {
     })
   })
 
+  let cancel: (() => void) | undefined
   // Requests are handled from a later event-loop turn, so none arrives before this runs.
   const code = new Promise<string>((resolve, reject) => {
     let settled = false
@@ -384,9 +393,9 @@ export async function listenForLoopbackCode(input: {
         }
         const rawUrl = req.url ?? ''
         if (rawUrl.length > maxCallbackUrlBytes) {
+          // Not the callback this login waits for; any page can send one, so it ends nothing.
           res.writeHead(414)
           res.end('Request too large')
-          finish(new Error('OAuth callback URL exceeded the size limit'))
           return
         }
         if (url.searchParams.get('state') !== input.state) {
@@ -417,8 +426,12 @@ export async function listenForLoopbackCode(input: {
     const timer = setTimeout(() => {
       finish(new Error(`OAuth timed out after ${input.timeoutMs}ms`))
     }, input.timeoutMs)
+    cancel = () => finish(new Error('Login ended before the authorization code arrived'))
   })
-  return { code: () => code }
+  // The caller awaits `code()` only after opening the browser; a rejection in
+  // that window is reported by that await, not as an unhandled rejection.
+  code.catch(() => {})
+  return { code: () => code, close: () => cancel?.() }
 }
 
 async function requestToken(fetch: Fetch, body: URLSearchParams): Promise<OauthToken> {

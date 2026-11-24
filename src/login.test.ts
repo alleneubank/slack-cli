@@ -38,7 +38,7 @@ async function authorize(delivery?: CodeDelivery) {
       authorizeUrl = url
     },
     async receiveCode() {
-      return { code: async () => authCode }
+      return { code: async () => authCode, close() {} }
     },
     async fetch(request) {
       tokenBody = new URLSearchParams(await request.text())
@@ -171,11 +171,35 @@ describe('Slack user OAuth', () => {
     expect(wrong.status).toBe(400)
     expect(await wrong.text()).toBe('Authorization state mismatch.')
 
+    const oversized = await fetch(
+      `http://127.0.0.1:${port}/callback?state=loopback.active-state&pad=${'x'.repeat(9_000)}`,
+    )
+    expect(oversized.status).toBe(414)
+
     const matching = await fetch(
       `http://127.0.0.1:${port}/callback?state=loopback.active-state&code=active-code`,
     )
     expect(matching.status).toBe(200)
     await expect(receiver.code()).resolves.toBe('active-code')
+  })
+
+  test('a login that fails before the code arrives releases the loopback port', async () => {
+    const port = OAUTH_LOOPBACK_PORT + 10_003
+    const login = authorizeSlackUser({
+      clientId: 'cid-test',
+      timeoutMs: 60_000,
+      onAuthorizeUrl: () => {
+        throw new Error('stdout closed')
+      },
+      async openUrl() {},
+      receiveCode: (input) => listenForLoopbackCode({ ...input, port }),
+      async fetch() {
+        throw new Error('no token exchange without a code')
+      },
+    })
+    await expect(login).rejects.toThrow('stdout closed')
+    const next = await listenForLoopbackCode({ state: 'loopback.next', timeoutMs: 1_000, port })
+    next.close()
   })
 
   test('a taken loopback port fails before the URL is shown or the browser opens', async () => {
@@ -218,7 +242,7 @@ describe('Slack user OAuth', () => {
         opened.push(url)
       },
       async receiveCode() {
-        return { code: async () => authCode }
+        return { code: async () => authCode, close() {} }
       },
       async fetch(request) {
         const body = await request.text()
@@ -255,7 +279,7 @@ describe('Slack user OAuth', () => {
         randomBytes: (size) => Uint8Array.from({ length: size }, () => 1),
         async openUrl() {},
         async receiveCode() {
-          return { code: async () => authCode }
+          return { code: async () => authCode, close() {} }
         },
         async fetch() {
           return Response.json({ ok: false, error: 'invalid_code' })
@@ -270,7 +294,7 @@ describe('Slack user OAuth', () => {
         randomBytes: (size) => Uint8Array.from({ length: size }, () => 1),
         async openUrl() {},
         async receiveCode() {
-          return { code: async () => authCode }
+          return { code: async () => authCode, close() {} }
         },
         async fetch() {
           return Response.json({ ok: false, error: 'invalid_code' })
