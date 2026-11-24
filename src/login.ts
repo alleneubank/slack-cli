@@ -83,8 +83,8 @@ type SignedIn = z.infer<typeof signedInOutput>
 /** The Slack app a login signs in through, and the workspace Slack is asked to open. */
 export type LoginTarget = {
   clientId: string
-  /** The stored workspace whose app this is, when no flag or variable chose one. */
-  storedFor?: string | undefined
+  /** What chose the app: a flag or variable, or the stored workspace it belongs to. Absent for the default. */
+  origin?: { input: '--client-id' | 'SLACK_CLIENT_ID' } | { storedFor: string } | undefined
   /** Workspace named by `--workspace` or `SLACK_WORKSPACE`; Slack treats it as a hint. */
   team?: string | undefined
 }
@@ -104,9 +104,9 @@ export function loginTarget(
   const variable = nonEmpty(env['SLACK_CLIENT_ID'])
   const chosen =
     flag !== undefined
-      ? { source: '--client-id', value: flag }
+      ? { input: '--client-id' as const, value: flag }
       : variable !== undefined
-        ? { source: 'SLACK_CLIENT_ID', value: variable }
+        ? { input: 'SLACK_CLIENT_ID' as const, value: variable }
         : undefined
   if (chosen !== undefined) {
     const clientId = parseClientId(chosen.value)
@@ -115,25 +115,29 @@ export function loginTarget(
         ok: false,
         error: {
           code: 'INVALID_ARGUMENT',
-          message: `${chosen.source} must be a Slack app client id (1234567890.1234567890) or shared`,
+          message: `${chosen.input} must be a Slack app client id (1234567890.1234567890) or shared`,
         },
       }
-    return { ok: true, value: { clientId, ...hint } }
+    return { ok: true, value: { clientId, origin: { input: chosen.input }, ...hint } }
   }
   const teamId = named ?? file.currentTeamId
   const storedClientId = teamId === undefined ? undefined : file.teams[teamId]?.clientId
   if (teamId !== undefined && storedClientId !== undefined)
-    return { ok: true, value: { clientId: storedClientId, storedFor: teamId, ...hint } }
+    return { ok: true, value: { clientId: storedClientId, origin: { storedFor: teamId }, ...hint } }
   return { ok: true, value: { clientId: SLACK_OAUTH_CLIENT_ID, ...hint } }
 }
 
 /** The line login prints before the authorize URL, naming the app it signs in through. */
 export function appLine(target: LoginTarget, file: CredentialsFile): string {
-  if (slackApp(target.clientId) === 'shared') return 'App: shared\n'
-  if (target.storedFor === undefined) return `App: own app ${target.clientId}\n`
-  const teamName = file.teams[target.storedFor]?.teamName
-  const workspace = teamName === undefined ? target.storedFor : `${target.storedFor} ${teamName}`
-  return `App: own app ${target.clientId} (stored for ${workspace})\n`
+  const app = slackApp(target.clientId) === 'shared' ? 'shared' : `own app ${target.clientId}`
+  return `App: ${app}${originNote(target.origin, file)}\n`
+}
+
+function originNote(origin: LoginTarget['origin'], file: CredentialsFile): string {
+  if (origin === undefined) return ''
+  if ('input' in origin) return ` (from ${origin.input})`
+  const teamName = file.teams[origin.storedFor]?.teamName
+  return ` (stored for ${teamName === undefined ? origin.storedFor : `${origin.storedFor} ${teamName}`})`
 }
 
 /**

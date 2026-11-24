@@ -47,16 +47,27 @@ export function appCli(deps: AppDeps): Cli.Cli {
       "Create the workspace's own Slack app, which Slack does not rate-limit like the shared app",
   }).command('create', {
     description:
-      'Create a Slack app in a workspace from the bundled manifest with an app configuration token, then sign in through it',
+      'Create a Slack app from the bundled manifest in the workspace of an app configuration token, read from a hidden prompt or stdin, then sign in through it',
     options: z.object(signInOptions),
     output: signedInOutput.extend({ appId: z.string().describe('Id of the created Slack app') }),
     mutates: true,
     async run(context) {
       const write = deps.oauth?.write ?? ((text: string) => process.stdout.write(text))
       const read = deps.readConfigurationToken ?? readConfigurationTokenFromTerminal
-      const token = configurationToken(
-        await read({ prompt: configurationTokenPrompt, timeoutMs: OAUTH_TIMEOUT_MS }),
-      )
+      let entered: string
+      try {
+        entered = await read({ prompt: configurationTokenPrompt, timeoutMs: OAUTH_TIMEOUT_MS })
+      } catch (error) {
+        // Cancelled, timed out, or stdin failed: in every case no token was entered.
+        const reason = error instanceof Error ? error.message : String(error)
+        return context.error(
+          commandError({
+            code: 'CONFIG_TOKEN_REQUIRED',
+            message: `No app configuration token was read: ${reason}`,
+          }),
+        )
+      }
+      const token = configurationToken(entered)
       if (!token.ok) return context.error(commandError(token.error))
 
       const manifest = await readFile(deps.manifestPath, 'utf8')
@@ -130,7 +141,7 @@ function configurationToken(entered: string): Outcome<string> {
       error: {
         code: 'INVALID_ARGUMENT',
         message:
-          'That is not an app configuration access token (xoxe.xoxp-…); paste the access token, not the refresh token',
+          'Expected an app configuration access token (xoxe.xoxp-…); refresh tokens and user tokens do not work here',
       },
     }
   return { ok: true, value: token }
