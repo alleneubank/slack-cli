@@ -1,5 +1,4 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { Cli, z } from '@alleneubank/incur'
 
@@ -26,6 +25,7 @@ import {
   type OauthHost,
 } from './login.js'
 import { SLACK_METHOD_FAMILIES } from './methods.js'
+import { PACKAGE_ROOT } from './package-root.js'
 import { parseClientId, SLACK_OAUTH_CLIENT_ID } from './slack-app.js'
 import { SOURCE_URL, VERSION } from './version.js'
 import { SLACK_API_ORIGIN, slackWebApiFamily, type WebApiDeps } from './web-api.js'
@@ -81,7 +81,6 @@ const environment: Environment = z.object({
 })
 
 /** Directory holding `skills/`, from `src/` in development and `dist/` when installed. */
-const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 
 /** Unofficial Slack CLI. Commands are typed Slack Web API methods from the generated catalog. */
 export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Environment, Globals> {
@@ -100,7 +99,7 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
     sync: {
       depth: 0,
       include: ['skills/slack'],
-      cwd: packageRoot,
+      cwd: PACKAGE_ROOT,
       body: 'Authorize a workspace first: slack login',
     },
     mcp: false,
@@ -189,7 +188,7 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
         ...loginDeps,
         env,
         origin: deps.apiOrigin ?? SLACK_API_ORIGIN,
-        manifestPath: path.join(packageRoot, 'slack-app-manifest.json'),
+        manifestPath: path.join(PACKAGE_ROOT, 'slack-app-manifest.json'),
         readConfigurationToken: deps.readConfigurationToken,
       }),
     )
