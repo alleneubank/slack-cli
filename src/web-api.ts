@@ -4,6 +4,7 @@ import { isTimeout, withDeadline } from './deadline.js'
 import { commandError, type Outcome } from './errors.js'
 import { withMessageLink } from './message-links.js'
 import { familySummary, slackMethod, slackMethods, type SlackMethod } from './methods.js'
+import { redactSecrets } from './redact.js'
 import { unixTimestamp } from './timestamps.js'
 
 export const SLACK_API_ORIGIN: string = 'https://slack.com'
@@ -266,16 +267,21 @@ async function post(
     return unreadable(method, 'Slack response is not JSON')
   }
   if (!isRecord(parsed)) return unreadable(method, 'Slack response is not a JSON object')
-  if (!isSuccess(parsed)) {
-    const code = typeof parsed['error'] === 'string' ? parsed['error'] : 'unknown_error'
-    const message = slackErrorMessage(method.name, code, parsed)
+  // Credentials in a response stop here, so no command can print them.
+  const redacted = redactSecrets(parsed)
+  if (redacted === undefined) return unreadable(method, 'Slack response nests too deeply')
+  const answer =
+    redacted.paths.length === 0 ? redacted.value : { ...redacted.value, redacted: redacted.paths }
+  if (!isSuccess(answer)) {
+    const code = typeof answer['error'] === 'string' ? answer['error'] : 'unknown_error'
+    const message = slackErrorMessage(method.name, code, answer)
     if (retryableSlackErrors.has(code)) return failure(code, message, true)
     if (uncertainSlackErrors.has(code)) return uncertain(method, code, message)
-    if (code === 'missing_scope' && typeof parsed['needed'] === 'string')
-      return { ok: false, error: { code, message, neededScopes: parsed['needed'].split(',') } }
+    if (code === 'missing_scope' && typeof answer['needed'] === 'string')
+      return { ok: false, error: { code, message, neededScopes: answer['needed'].split(',') } }
     return failure(code, message)
   }
-  return { ok: true, value: parsed }
+  return { ok: true, value: answer }
 }
 
 /** Reads the body, or returns undefined once it exceeds `bytesMax`. */

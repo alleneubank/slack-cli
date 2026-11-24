@@ -49,6 +49,12 @@ export const TIMESTAMP_ARGUMENTS: ReadonlySet<string> = new Set([
  */
 export const REPLACED_METHODS: ReadonlySet<string> = new Set(['files.upload'])
 
+/** A hand-written command to use instead of the method, named first in its help. */
+export const INSTEAD_OF: Readonly<Record<string, string>> = {
+  'apps.manifest.create':
+    "For this CLI's own app, use slack app create: it reads the app configuration token from a hidden prompt or stdin, not SLACK_TOKEN, and signs in through the new app",
+}
+
 /** Methods that change state although none of their documented scopes is a `:write` scope. */
 export const MUTATING_METHODS: ReadonlySet<string> = new Set([
   'admin.audit.anomaly.allow.updateItem',

@@ -501,6 +501,77 @@ describe('Slack Web API methods', () => {
   })
 })
 
+describe('credentials in responses', () => {
+  const secrets = {
+    client_secret: 'client-secret-not-a-secret',
+    signing_secret: 'signing-secret-not-a-secret',
+    verification_token: 'verification-not-a-secret',
+    access_token: 'xoxp-issued-not-a-secret',
+    refresh_token: 'xoxe-1-refresh-not-a-secret',
+  }
+
+  test('no command prints a token or secret Slack returns, at any depth', async () => {
+    const answers: Record<string, unknown> = {
+      'apps.manifest.create': {
+        ok: true,
+        app_id: 'A0NEW',
+        credentials: {
+          client_id: '1111111111.2222222222',
+          client_secret: secrets.client_secret,
+          signing_secret: secrets.signing_secret,
+          verification_token: secrets.verification_token,
+        },
+      },
+      'oauth.v2.access': {
+        ok: true,
+        token_type: 'user',
+        authed_user: [
+          { id: 'U1', access_token: secrets.access_token, refresh_token: secrets.refresh_token },
+        ],
+      },
+    }
+    const fetch = (request: Request) =>
+      Response.json(answers[new URL(request.url).pathname.slice(5)])
+    const created = await run(cli({ ...withToken(), fetch }), [
+      'apps',
+      'manifest',
+      'create',
+      '--manifest',
+      '{}',
+      '--json',
+    ])
+    const exchanged = await run(cli({ ...withToken(), fetch }), [
+      'oauth',
+      'v2',
+      'access',
+      '--code',
+      'c',
+      '--json',
+    ])
+    for (const result of [created, exchanged])
+      for (const secret of Object.values(secrets)) expect(result.output).not.toContain(secret)
+    expect(created.json()).toMatchObject({
+      app_id: 'A0NEW',
+      credentials: { client_id: '1111111111.2222222222', client_secret: '[redacted]' },
+      redacted: [
+        'credentials.client_secret',
+        'credentials.signing_secret',
+        'credentials.verification_token',
+      ],
+    })
+    expect(exchanged.json()).toMatchObject({
+      token_type: 'user',
+      authed_user: [{ id: 'U1', access_token: '[redacted]' }],
+      redacted: ['authed_user[0].access_token', 'authed_user[0].refresh_token'],
+    })
+  })
+
+  test('apps manifest create help points to slack app create', async () => {
+    const result = await run(cli(), ['apps', 'manifest', 'create', '--help'])
+    expect(result.output).toContain('use slack app create')
+  })
+})
+
 describe('agent skill', () => {
   const skillDir = new URL('../skills/slack/', import.meta.url)
   const skillFile = new URL('SKILL.md', skillDir)
