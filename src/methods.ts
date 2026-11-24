@@ -3,6 +3,7 @@ import { z } from '@alleneubank/incur'
 import catalogJson from './catalog.json' with { type: 'json' }
 import { HISTORY_WINDOW_OPTIONS, MESSAGE_LINK_SHAPE } from './message-links.js'
 import {
+  CREDENTIAL_METHODS,
   INSTEAD_OF,
   isDestructive,
   MESSAGE_LINK_METHODS,
@@ -15,7 +16,7 @@ import {
 import type { Catalog, CatalogArgument, CatalogMethod } from './reference.js'
 
 const catalog = catalogJson as Catalog
-for (const name of [...REPLACED_METHODS, ...Object.keys(INSTEAD_OF)])
+for (const name of [...REPLACED_METHODS, ...CREDENTIAL_METHODS, ...Object.keys(INSTEAD_OF)])
   if (!catalog.methods.some((method) => method.name === name))
     throw new Error(`Overlay method ${name} is not a catalog method`)
 
@@ -62,15 +63,20 @@ export type SlackMethod = {
   messageLink: MessageLinkTarget | undefined
 }
 
+/** Catalog methods mounted as commands. */
+const commandMethods = catalog.methods.filter(
+  (method) => !REPLACED_METHODS.has(method.name) && !CREDENTIAL_METHODS.has(method.name),
+)
+
 export const SLACK_METHOD_FAMILIES: string[] = [
-  ...new Set(catalog.methods.map((method) => familyOf(method.name))),
+  ...new Set(commandMethods.map((method) => familyOf(method.name))),
 ]
 
 const familySummaryLengthMax = 100
 
 /** Root help line for a family, e.g. `Slack chat.* methods (14): appendStream, delete, …`. */
 export function familySummary(family: string): string {
-  const names = catalog.methods
+  const names = commandMethods
     .filter((method) => familyOf(method.name) === family)
     .map((method) => method.name.slice(family.length + 1))
   const head = `Slack ${family}.* methods (${names.length}): `
@@ -85,8 +91,8 @@ export function familySummary(family: string): string {
 
 /** Methods of one top-level family, e.g. `conversations`, that are mounted as commands. */
 export function slackMethods(family: string): SlackMethod[] {
-  return catalog.methods
-    .filter((method) => familyOf(method.name) === family && !REPLACED_METHODS.has(method.name))
+  return commandMethods
+    .filter((method) => familyOf(method.name) === family)
     .map((method) => resolveMethod(method))
 }
 

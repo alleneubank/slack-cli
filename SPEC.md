@@ -179,7 +179,12 @@ replies`), a single Slack message link
   is redacted where it is parsed: a string under `token` or any key ending in
   `_token` or `_secret`, at any depth, becomes `[redacted]`, and the response
   gains `redacted`, the paths replaced (`credentials.client_secret`).
-  `slack apps manifest create --help` points to `slack app create`. Root `--help` lists
+  `slack apps manifest create --help` points to `slack app create`. Methods
+  whose result is a credential (`oauth.access`, `oauth.v2.access`,
+  `oauth.v2.user.access`, `oauth.v2.exchange`,
+  `oauth.v2.beginShortTokenRotation`, `oauth.v2.completeShortTokenRotation`,
+  `openid.connect.token`, `tooling.tokens.rotate`) are not commands: Slack
+  consumes the code or token they take, so a redacted result would be lost. Root `--help` lists
   `SLACK_TOKEN`, `SLACK_WORKSPACE`, and `SLACK_CLIENT_ID`; a set `SLACK_TOKEN`
   shows only `(set)`.
 - **REQ-AUTH-003** `slack login` authorizes with public PKCE through the app

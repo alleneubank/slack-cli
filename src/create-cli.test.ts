@@ -501,6 +501,10 @@ describe('Slack Web API methods', () => {
   })
 })
 
+function noSlackCall(): Response {
+  throw new Error('no Slack call')
+}
+
 describe('credentials in responses', () => {
   const secrets = {
     client_secret: 'client-secret-not-a-secret',
@@ -522,10 +526,10 @@ describe('credentials in responses', () => {
           verification_token: secrets.verification_token,
         },
       },
-      'oauth.v2.access': {
+      'apps.auth.external.get': {
         ok: true,
         token_type: 'user',
-        authed_user: [
+        external_tokens: [
           { id: 'U1', access_token: secrets.access_token, refresh_token: secrets.refresh_token },
         ],
       },
@@ -540,15 +544,16 @@ describe('credentials in responses', () => {
       '{}',
       '--json',
     ])
-    const exchanged = await run(cli({ ...withToken(), fetch }), [
-      'oauth',
-      'v2',
-      'access',
-      '--code',
-      'c',
+    const external = await run(cli({ ...withToken(), fetch }), [
+      'apps',
+      'auth',
+      'external',
+      'get',
+      '--external_token_id',
+      'Et1',
       '--json',
     ])
-    for (const result of [created, exchanged])
+    for (const result of [created, external])
       for (const secret of Object.values(secrets)) expect(result.output).not.toContain(secret)
     expect(created.json()).toMatchObject({
       app_id: 'A0NEW',
@@ -559,11 +564,24 @@ describe('credentials in responses', () => {
         'credentials.verification_token',
       ],
     })
-    expect(exchanged.json()).toMatchObject({
+    expect(external.json()).toMatchObject({
       token_type: 'user',
-      authed_user: [{ id: 'U1', access_token: '[redacted]' }],
-      redacted: ['authed_user[0].access_token', 'authed_user[0].refresh_token'],
+      external_tokens: [{ id: 'U1', access_token: '[redacted]' }],
+      redacted: ['external_tokens[0].access_token', 'external_tokens[0].refresh_token'],
     })
+  })
+
+  test('methods whose result is a credential are not commands', async () => {
+    for (const argv of [
+      ['tooling', 'tokens', 'rotate', '--refresh_token', 'xoxe-1-not-a-secret'],
+      ['oauth', 'v2', 'access', '--code', 'c'],
+      ['openid', 'connect', 'token', '--code', 'c'],
+    ]) {
+      const result = await run(cli({ ...withToken(), fetch: noSlackCall }), [...argv, '--json'])
+      expect(result.json()).toMatchObject({ code: 'COMMAND_NOT_FOUND' })
+    }
+    const openid = await run(cli(), ['openid', 'connect', '--help'])
+    expect(openid.output).toContain('userInfo')
   })
 
   test('apps manifest create help points to slack app create', async () => {
