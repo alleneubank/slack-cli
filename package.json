@@ -27,7 +27,7 @@
   "files": [
     "dist",
     "skills",
-    "slack-app-manifest.yaml"
+    "slack-app-manifest.json"
   ],
   "type": "module",
   "exports": {

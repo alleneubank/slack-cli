@@ -8,12 +8,19 @@ import { Cli, z } from '@alleneubank/incur'
 import {
   credentialResolver,
   credentialsFailure,
+  namedWorkspace,
+  nonEmpty,
   readStore,
   selectedWorkspace,
   unknownWorkspace,
 } from './auth.js'
-import { commandError } from './errors.js'
-import { fileCredentialStore, type CredentialStore, type TeamCredentials } from './credentials.js'
+import { commandError, type Outcome } from './errors.js'
+import {
+  fileCredentialStore,
+  type CredentialStore,
+  type CredentialsFile,
+  type TeamCredentials,
+} from './credentials.js'
 import { fileCommands } from './files.js'
 import { SLACK_METHOD_FAMILIES } from './methods.js'
 import {
@@ -24,14 +31,12 @@ import {
   waitForLoopbackCode,
   type CodeDelivery,
 } from './oauth.js'
+import { parseClientId, SLACK_OAUTH_CLIENT_ID, slackApp, slackAppSchema } from './slack-app.js'
 import { SOURCE_URL, VERSION } from './version.js'
 import { SLACK_API_ORIGIN, slackWebApiFamily, type WebApiDeps } from './web-api.js'
 import { workspacesCli } from './workspaces.js'
 
 const execFileAsync = promisify(execFile)
-
-/** Public OAuth client id for this CLI's Slack app. PKCE; no client secret. */
-export const SLACK_OAUTH_CLIENT_ID: string = '12085301315143.12095834471045'
 
 /** Browser side of `slack login`. */
 export type OauthHost = {
@@ -85,7 +90,9 @@ const environment: Environment = z.object({
   SLACK_CLIENT_ID: z
     .string()
     .optional()
-    .describe('OAuth client id for slack login, for a private app built from the manifest'),
+    .describe(
+      'Client id of the Slack app slack login uses, or shared; overrides the stored workspace app',
+    ),
 })
 
 /** Directory holding `skills/`, from `src/` in development and `dist/` when installed. */
@@ -97,9 +104,6 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
   const store = deps.credentials ?? fileCredentialStore()
   const fetch = deps.fetch ?? globalThis.fetch.bind(globalThis)
   const now = deps.now ?? Date.now
-  const envClientId = env['SLACK_CLIENT_ID']
-  const clientId =
-    envClientId !== undefined && envClientId.length > 0 ? envClientId : SLACK_OAUTH_CLIENT_ID
 
   const cli = Cli.create('slack', {
     version: deps.version ?? VERSION,
@@ -133,23 +137,43 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
           .describe(
             'Show the code in the browser and read it here, for a machine the browser cannot reach (SSH)',
           ),
+        clientId: z
+          .string()
+          .optional()
+          .describe(
+            'Client id of the Slack app to sign in through, or shared for this CLI app (default: SLACK_CLIENT_ID, then the app the workspace last used)',
+          ),
       }),
       output: z.object({
         ok: z.literal(true),
         teamId: z.string(),
         teamName: z.string().optional(),
         userId: z.string().optional(),
+        clientId: z.string().describe('Client id of the Slack app the workspace signed in through'),
+        app: slackAppSchema,
         scopes: z
           .array(z.string())
           .optional()
           .describe('Every user scope the token carries, including ones granted at earlier logins'),
       }),
       async run(context) {
+        const stored = await readStore(store)
+        if (!stored.ok) return context.error(commandError(stored.error))
+        const target = loginTarget(
+          context.options.clientId,
+          namedWorkspace(context.globals.workspace, env),
+          env,
+          stored.value,
+        )
+        if (!target.ok) return context.error(commandError(target.error))
+        const { clientId, team: teamHint } = target.value
         const oauth = deps.oauth ?? defaultOauthHost()
         const write = oauth.write ?? ((text: string) => process.stdout.write(text))
         const delivery: CodeDelivery = context.options.paste ? 'paste' : 'loopback'
+        write(appLine(target.value, stored.value))
         const issued = await authorizeSlackUser({
           clientId,
+          ...(teamHint === undefined ? undefined : { team: teamHint }),
           fetch,
           delivery,
           openUrl: oauth.openUrl,
@@ -177,23 +201,32 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
           ...(issued.teamName === undefined ? undefined : { teamName: issued.teamName }),
           ...(issued.scopes === undefined ? undefined : { scopes: issued.scopes }),
         }
+        let previousClientId: string | undefined
         try {
-          await store.withLock(async (locked) => {
+          previousClientId = await store.withLock(async (locked) => {
             const file = await locked.read()
             await locked.write({
               version: 1,
               currentTeamId: issued.teamId,
               teams: { ...file.teams, [issued.teamId]: team },
             })
+            return file.teams[issued.teamId]?.clientId
           })
         } catch (error) {
           return context.error(commandError(credentialsFailure(error)))
         }
+        // Slack's consent page can switch workspaces, so the app change is reported, not assumed.
+        if (previousClientId !== undefined && previousClientId !== clientId)
+          write(
+            `${issued.teamId} now signs in through ${appName(clientId)} instead of ${appName(previousClientId)}\n`,
+          )
         return {
           ok: true as const,
           teamId: issued.teamId,
           ...(issued.teamName === undefined ? undefined : { teamName: issued.teamName }),
           ...(issued.userId === undefined ? undefined : { userId: issued.userId }),
+          clientId,
+          app: slackApp(clientId),
           ...(issued.scopes === undefined ? undefined : { scopes: issued.scopes }),
         }
       },
@@ -243,7 +276,11 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
     })
     .command(workspacesCli({ store, env }))
 
-  const credential = credentialResolver({ env, store, fetch, now, clientId })
+  // Entries stored before login recorded a client id were issued by SLACK_CLIENT_ID's app or the shared one.
+  const variable = nonEmpty(env['SLACK_CLIENT_ID'])
+  const unrecordedClientId =
+    (variable === undefined ? undefined : parseClientId(variable)) ?? SLACK_OAUTH_CLIENT_ID
+  const credential = credentialResolver({ env, store, fetch, now, clientId: unrecordedClientId })
   const webApi: WebApiDeps = { fetch, credential, origin: deps.apiOrigin ?? SLACK_API_ORIGIN }
   for (const family of SLACK_METHOD_FAMILIES)
     cli.plugin(
@@ -251,6 +288,65 @@ export function createCli(deps: CreateCliDeps = {}): Cli.Cli<{}, undefined, Envi
       slackWebApiFamily(family, webApi, family === 'files' ? fileCommands(webApi) : undefined),
     )
   return cli
+}
+
+/** The Slack app a login signs in through, and the workspace Slack is asked to open. */
+type LoginTarget = {
+  clientId: string
+  /** The stored workspace whose app this is, when no flag or variable chose one. */
+  storedFor?: string | undefined
+  /** Workspace named by `--workspace` or `SLACK_WORKSPACE`; Slack treats it as a hint. */
+  team?: string | undefined
+}
+
+/**
+ * Client id precedence: `--client-id`, `SLACK_CLIENT_ID`, the app stored for
+ * the named or current workspace, then the shared app. Re-login therefore
+ * keeps a workspace on its own app without a variable.
+ */
+function loginTarget(
+  flag: string | undefined,
+  named: string | undefined,
+  env: Record<string, string | undefined>,
+  file: CredentialsFile,
+): Outcome<LoginTarget> {
+  const hint = named === undefined ? undefined : { team: named }
+  const variable = nonEmpty(env['SLACK_CLIENT_ID'])
+  const chosen =
+    flag !== undefined
+      ? { source: '--client-id', value: flag }
+      : variable !== undefined
+        ? { source: 'SLACK_CLIENT_ID', value: variable }
+        : undefined
+  if (chosen !== undefined) {
+    const clientId = parseClientId(chosen.value)
+    if (clientId === undefined)
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_ARGUMENT',
+          message: `${chosen.source} must be a Slack app client id (1234567890.1234567890) or shared`,
+        },
+      }
+    return { ok: true, value: { clientId, ...hint } }
+  }
+  const teamId = named ?? file.currentTeamId
+  const storedClientId = teamId === undefined ? undefined : file.teams[teamId]?.clientId
+  if (teamId !== undefined && storedClientId !== undefined)
+    return { ok: true, value: { clientId: storedClientId, storedFor: teamId, ...hint } }
+  return { ok: true, value: { clientId: SLACK_OAUTH_CLIENT_ID, ...hint } }
+}
+
+function appName(clientId: string): string {
+  return slackApp(clientId) === 'shared' ? 'the shared app' : `own app ${clientId}`
+}
+
+function appLine(target: LoginTarget, file: CredentialsFile): string {
+  if (slackApp(target.clientId) === 'shared') return 'App: shared\n'
+  if (target.storedFor === undefined) return `App: own app ${target.clientId}\n`
+  const teamName = file.teams[target.storedFor]?.teamName
+  const workspace = teamName === undefined ? target.storedFor : `${target.storedFor} ${teamName}`
+  return `App: own app ${target.clientId} (stored for ${workspace})\n`
 }
 
 function defaultOauthHost(): OauthHost {

@@ -12,9 +12,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, onTestFinished, test } from 'vitest'
 
-import { createCli, SLACK_OAUTH_CLIENT_ID, type OauthHost } from './create-cli.js'
+import { createCli, type OauthHost } from './create-cli.js'
 import { fileCredentialStore, type CredentialsFile } from './credentials.js'
 import { EXIT_LOGIN, EXIT_RETRYABLE } from './errors.js'
+import { SLACK_OAUTH_CLIENT_ID } from './slack-app.js'
 
 const accessToken = 'xoxe.xoxp-access-not-a-secret'
 const refreshToken = 'xoxe-refresh-not-a-secret'
@@ -595,10 +596,12 @@ describe('workspaces', () => {
       teamId: 'T3',
       teamName: 'Remote',
       userId: 'U3',
+      clientId: SLACK_OAUTH_CLIENT_ID,
+      app: 'shared',
       scopes: ['channels:read', 'users:read'],
     })
     expect(result.output).not.toMatch(/not-a-secret/)
-    expect(terminal).toEqual(['authorize url', 'paste prompt'])
+    expect(terminal).toEqual(['App: shared\n', 'authorize url', 'paste prompt'])
     expect(exchanged[0]?.get('code')).toBe('pasted-code-not-a-secret')
     expect(readCredentials(file).teams['T3']).toEqual({
       accessToken: 'xoxp-long-lived-not-a-secret',
@@ -644,6 +647,8 @@ describe('workspaces', () => {
       teamId: 'T2',
       teamName: 'Second',
       userId: 'U2',
+      clientId: SLACK_OAUTH_CLIENT_ID,
+      app: 'shared',
       scopes: ['channels:read', 'chat:write'],
     })
     expect(result.output).not.toMatch(/not-a-secret/)
@@ -665,6 +670,98 @@ describe('workspaces', () => {
       },
     })
     expect(statSync(file).mode & 0o777).toBe(0o600)
+  })
+
+  test('login signs in through --client-id, then SLACK_CLIENT_ID, then the stored app, then the shared app', async () => {
+    const own = '1111111111.2222222222'
+    const stored = rotatingStore({
+      T1: { accessToken: 'xoxp-one-not-a-secret', clientId: own, teamName: 'Own' },
+      T2: { accessToken: 'xoxp-two-not-a-secret', clientId: SLACK_OAUTH_CLIENT_ID },
+    })
+    const login = async (argv: string[], env: Record<string, string> = {}) => {
+      const file = credentialsFile(stored)
+      const opened: URL[] = []
+      const terminal: string[] = []
+      const result = await run(
+        cli({
+          file,
+          env,
+          fetch: async () =>
+            Response.json({
+              ok: true,
+              access_token: 'xoxp-issued-not-a-secret',
+              team: { id: 'T1', name: 'Own' },
+              authed_user: { id: 'U1' },
+            }),
+          oauth: {
+            timeoutMs: 1_000,
+            write: (text) => {
+              if (!text.startsWith('Authorize Slack:')) terminal.push(text)
+            },
+            async openUrl(url) {
+              opened.push(new URL(url))
+            },
+            async waitForCode() {
+              return { code: 'auth-code-not-a-secret' }
+            },
+            async readPastedCode() {
+              throw new Error('not a paste login')
+            },
+          },
+        }),
+        ['login', ...argv, '--json'],
+      )
+      return {
+        result,
+        clientId: opened[0]?.searchParams.get('client_id'),
+        team: opened[0]?.searchParams.get('team'),
+        terminal,
+        stored: readCredentials(file).teams['T1'],
+      }
+    }
+
+    // Re-login of the current workspace keeps its own app without a variable.
+    const relogin = await login(['--write'])
+    expect(relogin.clientId).toBe(own)
+    expect(relogin.team).toBeNull()
+    expect(relogin.terminal).toEqual([`App: own app ${own} (stored for T1 Own)\n`])
+    expect(relogin.stored?.clientId).toBe(own)
+    expect(relogin.result.json()).toMatchObject({ teamId: 'T1', clientId: own, app: 'own' })
+
+    const named = await login(['--workspace', 'T2'])
+    expect([named.clientId, named.team]).toEqual([SLACK_OAUTH_CLIENT_ID, 'T2'])
+    // Slack signs in T1 although T2 was named, as when the user switches workspace on the consent page.
+    expect(named.terminal).toEqual([
+      'App: shared\n',
+      `T1 now signs in through the shared app instead of own app ${own}\n`,
+    ])
+
+    const unstored = await login(['--workspace', 'T9'])
+    expect([unstored.clientId, unstored.team]).toEqual([SLACK_OAUTH_CLIENT_ID, 'T9'])
+
+    const variable = await login([], { SLACK_CLIENT_ID: '3333333333.4444444444' })
+    expect(variable.clientId).toBe('3333333333.4444444444')
+    expect(variable.stored?.clientId).toBe('3333333333.4444444444')
+    expect(variable.terminal).toEqual([
+      'App: own app 3333333333.4444444444\n',
+      `T1 now signs in through own app 3333333333.4444444444 instead of own app ${own}\n`,
+    ])
+
+    const flag = await login(['--client-id', 'shared'], {
+      SLACK_CLIENT_ID: '3333333333.4444444444',
+    })
+    expect(flag.clientId).toBe(SLACK_OAUTH_CLIENT_ID)
+    expect(flag.result.json()).toMatchObject({ clientId: SLACK_OAUTH_CLIENT_ID, app: 'shared' })
+
+    for (const invalid of [
+      await login(['--client-id', 'A0123ABCD']),
+      await login([], { SLACK_CLIENT_ID: 'A0123ABCD' }),
+    ]) {
+      expect(invalid.result.exitCode).toBe(1)
+      expect(invalid.result.output).toContain('INVALID_ARGUMENT')
+      expect(invalid.clientId).toBeUndefined()
+      expect(invalid.stored?.clientId).toBe(own)
+    }
   })
 
   test('--workspace and SLACK_WORKSPACE select a workspace; SLACK_TOKEN overrides both', async () => {
@@ -704,11 +801,12 @@ describe('workspaces', () => {
     const file = credentialsFile(
       rotatingStore(
         {
-          T2: { accessToken: 'xoxp-two-not-a-secret' },
+          T2: { accessToken: 'xoxp-two-not-a-secret', clientId: SLACK_OAUTH_CLIENT_ID },
           T1: {
             accessToken,
             refreshToken,
             expiresAt: start + hour,
+            clientId: '1111111111.2222222222',
             userId: 'U1',
             teamName: 'Example',
             scopes: ['channels:read', 'chat:write'],
@@ -728,11 +826,19 @@ describe('workspaces', () => {
           teamName: 'Example',
           userId: 'U1',
           current: true,
+          clientId: '1111111111.2222222222',
+          app: 'own',
           rotating: true,
           expiresAt: new Date(start + hour).toISOString(),
           scopes: ['channels:read', 'chat:write'],
         },
-        { teamId: 'T2', current: false, rotating: false },
+        {
+          teamId: 'T2',
+          current: false,
+          clientId: SLACK_OAUTH_CLIENT_ID,
+          app: 'shared',
+          rotating: false,
+        },
       ],
     })
     expect(listed.output).not.toMatch(/not-a-secret/)

@@ -50,6 +50,12 @@ output.
   0600, holding `version: 1`, `currentTeamId`, and `teams` keyed by team id.
   Each team entry has `accessToken` and optional `refreshToken`, `expiresAt`
   (epoch milliseconds), `clientId`, and `userId`.
+- **Shared app / own app** — the shared app is this CLI's publicly
+  distributed Slack app, whose client id is packaged. An own app is any other
+  Slack app a workspace signs in through, typically one created in that
+  workspace from the manifest. Slack caps `conversations.history` and
+  `conversations.replies` for the shared app (it is not in the Marketplace)
+  but not for an app internal to the workspace.
 - **Rotating token** — an `xoxe.` access token that expires 12 hours after
   issue and is renewed with its refresh token through
   `oauth.v2.user.access` (`grant_type=refresh_token`). Each refresh revokes
@@ -172,8 +178,15 @@ replies`), a single Slack message link
   refresh token, client secret, or authorization code. Root `--help` lists
   `SLACK_TOKEN`, `SLACK_WORKSPACE`, and `SLACK_CLIENT_ID`; a set `SLACK_TOKEN`
   shows only `(set)`.
-- **REQ-AUTH-003** `slack login` authorizes with public PKCE using the packaged
-  client id, overridable with `SLACK_CLIENT_ID`. Never argv. The Slack app sets
+- **REQ-AUTH-003** `slack login` authorizes with public PKCE through the app
+  whose client id is `--client-id`, else `SLACK_CLIENT_ID`, else the one
+  stored for the workspace named by `--workspace` or `SLACK_WORKSPACE` or else
+  the current one, else the shared app's. Both inputs take `<digits>.<digits>`
+  or `shared` (the shared app); anything else is `INVALID_ARGUMENT` before any
+  request. Before the authorize URL, login prints `App: shared` or
+  `App: own app <client id>`, naming the stored workspace when it supplied the
+  id. A workspace named by `--workspace` or `SLACK_WORKSPACE`, stored or not,
+  is sent as the authorize URL's `team` hint. The Slack app sets
   `pkce_enabled: true`, `token_rotation_enabled: false`, and registers only the
   HTTPS redirect `https://alleneubank.github.io/slack-cli/callback/` (Slack
   requires HTTPS redirects to distribute an app). Token exchange sends that
@@ -189,7 +202,10 @@ replies`), a single Slack message link
   not code-shaped without echoing it, and does not listen on a port.
 - **REQ-AUTH-004** `slack login` adds or replaces the authorized workspace,
   records its client id and expiry, and makes it current; other workspaces are
-  kept. `slack logout` removes the selected workspace and, when others remain,
+  kept. Its output includes the `clientId` and `app` (`shared` or `own`). When
+  the authorized workspace was stored with another client id (the user chose
+  another workspace on Slack's consent page, or an override named another
+  app), login prints that the workspace moved from one app to the other. `slack logout` removes the selected workspace and, when others remain,
   makes the lowest remaining team id current and reports it. `slack logout
 --all` removes every workspace. A legacy single-object credentials file is read as one
   team and rewritten in the versioned format on the next write. Writes are
@@ -203,8 +219,8 @@ replies`), a single Slack message link
 - **REQ-AUTH-006** Login and refresh record the user scopes Slack reports
   (which accumulate across logins) and the team name. `slack workspaces list`
   shows each stored workspace (team id and name, user id, whether it is
-  current, whether it rotates, access token expiry, and with `--scopes` the
-  scopes) and whether `SLACK_TOKEN` overrides them, without printing tokens.
+  current, its client id and `app` when recorded, whether it rotates, access
+  token expiry, and with `--scopes` the scopes) and whether `SLACK_TOKEN` overrides them, without printing tokens.
   Scopes are opt-in because they are most of the output (about 60 per
   workspace) and a `missing_scope` error already names the scope it needs. `slack workspaces use
 <team>` makes a stored workspace current.
@@ -295,7 +311,18 @@ replies`), a single Slack message link
   argument's description rather than generated example commands, which would
   omit arguments the docs mark optional but a call needs (`text` for
   `chat.postMessage`).
-- Local `slack-app-manifest.yaml` is the Slack app source of truth and lists
+- A login reuses the workspace's stored app, so re-login without a variable
+  does not move a workspace back to the shared app. An app that is not
+  distributed signs in only the workspace that created it, so while such a
+  workspace is current, a bare `slack login` re-authorizes it;
+  `--client-id shared` or another app's id adds a different workspace. The
+  client id may be a flag: under PKCE it is public (the authorize URL carries
+  it). `SLACK_CLIENT_ID` keeps precedence over the stored app as an explicit
+  override.
+- The manifest is JSON (`slack-app-manifest.json`): `apps.manifest.create`
+  takes JSON, Slack's "Paste a manifest" dialog accepts it, and the package
+  needs no YAML parser.
+- Local `slack-app-manifest.json` is the Slack app source of truth and lists
   exactly the scopes login requests. Login requests every user scope a catalog
   method accepts that Slack lets a distributed app request in a standard
   workspace: plain `slack login` requests only scopes no state-changing method
@@ -332,6 +359,9 @@ replies`), a single Slack message link
   exists; `skills add` installs it with those files)
 - REQ-AUTH-003 (redirect page, state, paste) — `src/login.test.ts` imports the
   page's `docs/callback/relay.js`; a live login in the test workspace
+- Login client id — `src/create-cli.test.ts` (flag, variable, stored app,
+  and shared app precedence; re-login keeps the stored app; malformed ids);
+  a live re-login in the test workspace through its own app
 - Login scopes — `src/login.test.ts` (plain login requests no scope a
   state-changing method accepts; the manifest lists exactly the requested
   scopes)
