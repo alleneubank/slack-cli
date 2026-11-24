@@ -12,8 +12,10 @@ import {
   oauthScopes,
   parsePastedCode,
   OAUTH_TIMEOUT_MS,
-  waitForLoopbackCode,
+  listenForLoopbackCode,
+  LoopbackPortInUseError,
   type CodeDelivery,
+  type ReceiveCode,
 } from './oauth.js'
 import { parseClientId, SLACK_OAUTH_CLIENT_ID, slackApp, slackAppSchema } from './slack-app.js'
 
@@ -22,8 +24,8 @@ const execFileAsync = promisify(execFile)
 /** Browser side of `slack login`. */
 export type OauthHost = {
   openUrl: (url: string) => Promise<void>
-  /** Receives the code the redirect page forwards to the loopback listener. */
-  waitForCode: (input: { state: string; timeoutMs: number }) => Promise<{ code: string }>
+  /** Listens for the code the redirect page forwards to the loopback listener. */
+  receiveCode: ReceiveCode
   /** Reads the code the user pastes from the redirect page (`slack login --paste`). */
   readPastedCode: (input: { timeoutMs: number }) => Promise<string>
   write?: (text: string) => void
@@ -154,23 +156,35 @@ export async function signIn(
   const write = oauth.write ?? ((text: string) => process.stdout.write(text))
   const delivery: CodeDelivery = options.paste ? 'paste' : 'loopback'
   write(options.announce)
-  const issued = await authorizeSlackUser({
-    clientId,
-    ...(teamHint === undefined ? undefined : { team: teamHint }),
-    fetch: deps.fetch,
-    delivery,
-    openUrl: oauth.openUrl,
-    waitForCode:
-      delivery === 'paste'
-        ? async (input) => ({ code: await oauth.readPastedCode(input) })
-        : oauth.waitForCode,
-    onAuthorizeUrl: (url) => {
-      write(`Authorize Slack:\n${url}\n`)
-    },
-    ...(oauth.randomBytes ? { randomBytes: oauth.randomBytes } : undefined),
-    timeoutMs: oauth.timeoutMs ?? OAUTH_TIMEOUT_MS,
-    scope: oauthScopes(options.write),
-  })
+  let issued: Awaited<ReturnType<typeof authorizeSlackUser>>
+  try {
+    issued = await authorizeSlackUser({
+      clientId,
+      ...(teamHint === undefined ? undefined : { team: teamHint }),
+      fetch: deps.fetch,
+      delivery,
+      openUrl: oauth.openUrl,
+      receiveCode:
+        delivery === 'paste'
+          ? async (input) => ({ code: () => oauth.readPastedCode(input) })
+          : oauth.receiveCode,
+      onAuthorizeUrl: (url) => {
+        write(`Authorize Slack:\n${url}\n`)
+      },
+      ...(oauth.randomBytes ? { randomBytes: oauth.randomBytes } : undefined),
+      timeoutMs: oauth.timeoutMs ?? OAUTH_TIMEOUT_MS,
+      scope: oauthScopes(options.write),
+    })
+  } catch (error) {
+    if (!(error instanceof LoopbackPortInUseError)) throw error
+    return {
+      ok: false,
+      error: {
+        code: 'LOGIN_IN_PROGRESS',
+        message: `Port ${error.port} is in use, most likely by another slack login waiting for consent; finish or cancel it, or sign in with slack login --paste`,
+      },
+    }
+  }
   const team: TeamCredentials = {
     accessToken: issued.accessToken,
     clientId,
@@ -226,7 +240,7 @@ function defaultOauthHost(): OauthHost {
       else if (process.platform === 'win32') await execFileAsync('cmd', ['/c', 'start', '', url])
       else await execFileAsync('xdg-open', [url])
     },
-    waitForCode: (input) => waitForLoopbackCode(input),
+    receiveCode: (input) => listenForLoopbackCode(input),
     async readPastedCode({ timeoutMs }) {
       const terminal = createInterface({ input: process.stdin, output: process.stderr })
       try {

@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, onTestFinished, test } from 'vit
 import { createCli, type OauthHost } from './create-cli.js'
 import { fileCredentialStore, type CredentialsFile } from './credentials.js'
 import { EXIT_LOGIN, EXIT_RETRYABLE } from './errors.js'
+import { listenForLoopbackCode, OAUTH_LOOPBACK_PORT } from './oauth.js'
 import { SLACK_OAUTH_CLIENT_ID } from './slack-app.js'
 
 const accessToken = 'xoxe.xoxp-access-not-a-secret'
@@ -584,7 +585,7 @@ describe('workspaces', () => {
             terminal.push(text.startsWith('Authorize Slack:') ? 'authorize url' : text)
           },
           async openUrl() {},
-          async waitForCode() {
+          async receiveCode() {
             throw new Error('paste login must not listen on the loopback port')
           },
           async readPastedCode() {
@@ -617,6 +618,47 @@ describe('workspaces', () => {
     })
   })
 
+  test('a login while another holds the loopback port fails before the browser opens', async () => {
+    const port = OAUTH_LOOPBACK_PORT + 10_002
+    const waiting = await listenForLoopbackCode({
+      state: 'loopback.waiting',
+      timeoutMs: 1_000,
+      port,
+    })
+    const file = credentialsFile()
+    const opened: string[] = []
+    const result = await run(
+      cli({
+        file,
+        fetch: () => {
+          throw new Error('no token exchange without a code')
+        },
+        oauth: {
+          timeoutMs: 1_000,
+          write: (text) => opened.push(text),
+          async openUrl(url) {
+            opened.push(url)
+          },
+          receiveCode: (input) => listenForLoopbackCode({ ...input, port }),
+          async readPastedCode() {
+            throw new Error('not a paste login')
+          },
+        },
+      }),
+      ['login', '--json'],
+    )
+    expect(result.exitCode).toBe(1)
+    expect(result.json()).toMatchObject({
+      code: 'LOGIN_IN_PROGRESS',
+      message: expect.stringContaining('slack login --paste') as unknown,
+    })
+    expect(opened.join('')).not.toContain('Authorize Slack')
+    expect(existsSync(file)).toBe(false)
+
+    await fetch(`http://127.0.0.1:${port}/callback?state=loopback.waiting&code=waiting-code`)
+    await expect(waiting.code()).resolves.toBe('waiting-code')
+  })
+
   test('login adds a workspace, keeps the others, and makes it current', async () => {
     const file = credentialsFile(rotatingStore({ T1: { accessToken } }))
     const opened: string[] = []
@@ -639,8 +681,8 @@ describe('workspaces', () => {
           async openUrl(url) {
             opened.push(url)
           },
-          async waitForCode() {
-            return { code: 'auth-code-not-a-secret' }
+          async receiveCode() {
+            return { code: async () => 'auth-code-not-a-secret' }
           },
         },
       }),
@@ -706,8 +748,8 @@ describe('workspaces', () => {
             async openUrl(url) {
               opened.push(new URL(url))
             },
-            async waitForCode() {
-              return { code: 'auth-code-not-a-secret' }
+            async receiveCode() {
+              return { code: async () => 'auth-code-not-a-secret' }
             },
             async readPastedCode() {
               throw new Error('not a paste login')
@@ -1284,14 +1326,14 @@ describe('files download', () => {
 })
 
 /** Browser side of a loopback login whose code comes from `code`. */
-function consentHost(code: () => Promise<{ code: string }>, terminal: string[] = []): OauthHost {
+function consentHost(code: () => Promise<string>, terminal: string[] = []): OauthHost {
   return {
     timeoutMs: 1_000,
     write: (text) => {
       if (!text.startsWith('Authorize Slack:')) terminal.push(text)
     },
     async openUrl() {},
-    waitForCode: code,
+    receiveCode: async () => ({ code }),
     async readPastedCode() {
       throw new Error('not a paste login')
     },
@@ -1340,7 +1382,7 @@ describe('app create', () => {
             authed_user: { id: 'U1' },
           })
         },
-        oauth: consentHost(async () => ({ code: 'auth-code-not-a-secret' }), terminal),
+        oauth: consentHost(async () => 'auth-code-not-a-secret', terminal),
       }),
       ['app', 'create', '--json'],
     )

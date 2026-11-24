@@ -196,7 +196,10 @@ replies`), a single Slack message link
   forwards only `code`, `state`, and `error`, and only to
   `http://127.0.0.1:8912/callback`, for a `loopback.` state; shows the code
   for a `paste.` state, then removes it from the address bar; and otherwise
-  shows install instructions. The loopback listener ignores callbacks whose
+  shows install instructions. Login binds the loopback listener before it
+  prints the authorize URL or opens the browser; when port 8912 is taken
+  (another login waiting for consent) it is `LOGIN_IN_PROGRESS`, naming
+  `slack login --paste`, and prints no URL. The loopback listener ignores callbacks whose
   state does not match the active login and keeps waiting for the matching
   callback until its deadline. With `--paste` the CLI prints the authorize URL
   before prompting, reads the code from the terminal, rejects text that is

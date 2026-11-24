@@ -17,7 +17,8 @@ import {
   OAUTH_REDIRECT_URI,
   OAUTH_TOKEN_URL,
   OAUTH_WRITE_SCOPES,
-  waitForLoopbackCode,
+  listenForLoopbackCode,
+  LoopbackPortInUseError,
   type CodeDelivery,
 } from './oauth.js'
 import type { Catalog } from './reference.js'
@@ -36,8 +37,8 @@ async function authorize(delivery?: CodeDelivery) {
     async openUrl(url) {
       authorizeUrl = url
     },
-    async waitForCode() {
-      return { code: authCode }
+    async receiveCode() {
+      return { code: async () => authCode }
     },
     async fetch(request) {
       tokenBody = new URLSearchParams(await request.text())
@@ -130,19 +131,6 @@ describe('HTTPS redirect relay', () => {
   })
 })
 
-async function fetchEventually(url: string): Promise<Response> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 20; attempt++) {
-    try {
-      return await fetch(url)
-    } catch (error) {
-      lastError = error
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
-  }
-  throw lastError
-}
-
 describe('login scopes', () => {
   test('plain slack login requests no scope that a state-changing method accepts', () => {
     // Only as complete as `mutates`: a `:write` scope or an entry in the overlay's MUTATING_METHODS.
@@ -171,24 +159,48 @@ describe('login scopes', () => {
 describe('Slack user OAuth', () => {
   test('a callback for another login does not stop the active login', async () => {
     const port = OAUTH_LOOPBACK_PORT + 10_000
-    const codePromise = waitForLoopbackCode({
+    const receiver = await listenForLoopbackCode({
       state: 'loopback.active-state',
       timeoutMs: 1_000,
       port,
     })
-    void codePromise.catch(() => {})
 
-    const wrong = await fetchEventually(
+    const wrong = await fetch(
       `http://127.0.0.1:${port}/callback?state=loopback.stale-state&code=stale-code`,
     )
     expect(wrong.status).toBe(400)
     expect(await wrong.text()).toBe('Authorization state mismatch.')
 
-    const matching = await fetchEventually(
+    const matching = await fetch(
       `http://127.0.0.1:${port}/callback?state=loopback.active-state&code=active-code`,
     )
     expect(matching.status).toBe(200)
-    await expect(codePromise).resolves.toEqual({ code: 'active-code' })
+    await expect(receiver.code()).resolves.toBe('active-code')
+  })
+
+  test('a taken loopback port fails before the URL is shown or the browser opens', async () => {
+    const port = OAUTH_LOOPBACK_PORT + 10_001
+    const first = await listenForLoopbackCode({ state: 'loopback.first', timeoutMs: 1_000, port })
+    const shown: string[] = []
+    await expect(
+      authorizeSlackUser({
+        clientId: 'cid-test',
+        timeoutMs: 1_000,
+        onAuthorizeUrl: (url) => shown.push(url),
+        async openUrl(url) {
+          shown.push(url)
+        },
+        receiveCode: (input) => listenForLoopbackCode({ ...input, port }),
+        async fetch() {
+          throw new Error('no token exchange without a code')
+        },
+      }),
+    ).rejects.toBeInstanceOf(LoopbackPortInUseError)
+    expect(shown).toEqual([])
+
+    // The first login is unaffected and still receives its code.
+    await fetch(`http://127.0.0.1:${port}/callback?state=loopback.first&code=first-code`)
+    await expect(first.code()).resolves.toBe('first-code')
   })
 
   test('exchanges a loopback code for an access token and does not echo secrets', async () => {
@@ -205,8 +217,8 @@ describe('Slack user OAuth', () => {
       async openUrl(url) {
         opened.push(url)
       },
-      async waitForCode() {
-        return { code: authCode }
+      async receiveCode() {
+        return { code: async () => authCode }
       },
       async fetch(request) {
         const body = await request.text()
@@ -242,8 +254,8 @@ describe('Slack user OAuth', () => {
         timeoutMs: 1_000,
         randomBytes: (size) => Uint8Array.from({ length: size }, () => 1),
         async openUrl() {},
-        async waitForCode() {
-          return { code: authCode }
+        async receiveCode() {
+          return { code: async () => authCode }
         },
         async fetch() {
           return Response.json({ ok: false, error: 'invalid_code' })
@@ -257,8 +269,8 @@ describe('Slack user OAuth', () => {
         timeoutMs: 1_000,
         randomBytes: (size) => Uint8Array.from({ length: size }, () => 1),
         async openUrl() {},
-        async waitForCode() {
-          return { code: authCode }
+        async receiveCode() {
+          return { code: async () => authCode }
         },
         async fetch() {
           return Response.json({ ok: false, error: 'invalid_code' })
