@@ -1,5 +1,20 @@
 # @alleneubank/slack-cli
 
+## 0.7.0
+
+### Minor Changes
+
+- eab4dc5: New `slack app update` adds the user scopes, redirect, and PKCE setting that this release's `slack login` needs to a workspace's own Slack app, reading an app configuration token from a hidden prompt or stdin. It keeps the app's name, icon, and other scopes, and changes nothing when the app already matches. `slack app create` now stores the app id with the workspace (shown by `slack workspaces list`), and `slack app update --app A…` covers apps made by hand. When Slack refuses a login with "Invalid permissions requested", the redirect page and the login's timeout error now point to `slack app update`.
+- 6a33bcb: GitHub releases now carry standalone `slack` executables for macOS (arm64, x64) and Linux (x64, arm64), built with Bun, with `SHA256SUMS` and a build provenance attestation. They need no Node.js and start in about a twentieth of the time. The npm package is unchanged.
+- 76eeab0: Tokens and secrets in Slack's responses are no longer printed. Any string under `token` or a key ending in `_token` or `_secret`, at any depth, is shown as `[redacted]`, and the response lists the replaced paths in `redacted`. This covers `apps manifest create` (the new app's client secret, signing secret, and verification token) and `apps auth external get`.
+
+  The methods that exist to return a credential for an app's own OAuth server or token rotation are no longer commands: `oauth access`, `oauth v2 access`, `oauth v2 user access`, `oauth v2 exchange`, `oauth v2 beginShortTokenRotation`, `oauth v2 completeShortTokenRotation`, `openid connect token`, and `tooling tokens rotate`. Slack consumes the code or token they take, so a redacted answer would be lost. `slack login` and `slack app create` cover what this CLI needs from them. `apps manifest create --help` now points to `slack app create`.
+
+### Patch Changes
+
+- 4e5fd1d: A `slack login` started while another is waiting for consent on port 8912 now fails with `LOGIN_IN_PROGRESS` before it prints the authorize URL or opens the browser. Before, it opened the browser and then crashed with `EADDRINUSE`.
+- 3e724cc: OAuth token requests (login and refresh) and file downloads and uploads now end at their deadline even when Slack's response stalls after its headers, as Web API calls already did. Before, a stalled token refresh or download could hang until the server closed the connection.
+
 ## 0.6.0
 
 ### Minor Changes
